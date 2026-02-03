@@ -463,9 +463,23 @@
     <div class="map-info" id="mapInfo"></div>
   </div>
 
-  <!-- 2. Mode + inputs -->
+  <!-- 2. Observer Location -->
   <div class="panel">
-    <div class="panel-label">2 — Configure</div>
+    <div class="panel-label">2 — Observer Location</div>
+    <div style="display: flex; gap: 12px; align-items: end; margin-bottom: 14px;">
+      <div class="input-wrap" style="flex: 1;"><label>Latitude</label><input type="text" id="obsLat" placeholder="e.g. 48.8566" /></div>
+      <div class="input-wrap" style="flex: 1;"><label>Longitude</label><input type="text" id="obsLng" placeholder="e.g. 2.3522" /></div>
+      <button class="btn btn-secondary" id="btnSetFromMap" style="margin-left: auto;">📍 Click Map to Set</button>
+    </div>
+    <div class="input-wrap" style="width:160px;">
+      <label>Local observer height (m)</label>
+      <input type="text" id="obsHeight" value="10" />
+    </div>
+  </div>
+
+  <!-- 3. Mode + inputs -->
+  <div class="panel">
+    <div class="panel-label">3 — Configure</div>
 
     <!-- mode toggle -->
     <div class="mode-toggle">
@@ -477,19 +491,17 @@
     <div class="mode-section active" id="section-ab">
       <div class="coord-row">
         <div class="coord-block">
-          <div class="coord-label">▸ Start</div>
-          <div class="coord-fields">
-            <div class="input-wrap"><label>Latitude</label><input type="text" id="startLat" placeholder="e.g. 48.8566" /></div>
-            <div class="input-wrap"><label>Longitude</label><input type="text" id="startLng" placeholder="e.g. 2.3522" /></div>
-          </div>
-        </div>
-        <div class="arrow-col"><span>→</span></div>
-        <div class="coord-block">
-          <div class="coord-label">▸ End</div>
+          <div class="coord-label">▸ Target Point</div>
           <div class="coord-fields">
             <div class="input-wrap"><label>Latitude</label><input type="text" id="endLat" placeholder="e.g. 48.9566" /></div>
             <div class="input-wrap"><label>Longitude</label><input type="text" id="endLng" placeholder="e.g. 2.4522" /></div>
           </div>
+        </div>
+      </div>
+      <div style="display:flex; gap:16px; margin-top:14px;">
+        <div class="input-wrap" style="width:180px;">
+          <label>Max remote tower height (m)</label>
+          <input type="text" id="endHeight" value="10" />
         </div>
       </div>
     </div>
@@ -497,8 +509,6 @@
     <!-- Radial inputs -->
     <div class="mode-section" id="section-radial">
       <div class="radial-row">
-        <div class="input-wrap"><label>Latitude</label><input type="text" id="radLat" placeholder="e.g. 48.8566" /></div>
-        <div class="input-wrap"><label>Longitude</label><input type="text" id="radLng" placeholder="e.g. 2.3522" /></div>
         <div class="input-wrap"><label>Radius (km)</label><input type="text" id="radRadius" placeholder="e.g. 10" /></div>
       </div>
       <div style="display:flex; gap:16px; margin-top:14px; flex-wrap:wrap;">
@@ -519,10 +529,6 @@
             <option value="1000">1 000</option>
           </select>
         </div>
-        <div class="input-wrap" style="width:160px;">
-          <label>Local observer height (m)</label>
-          <input type="text" id="radObsHeight" value="0" />
-        </div>
         <div class="input-wrap" style="width:180px;">
           <label>Max remote tower height (m)</label>
           <input type="number" id="radMaxTowerHeight" value="50" min="0" step="5" />
@@ -541,9 +547,9 @@
     </div>
   </div>
 
-  <!-- 3. Generate -->
+  <!-- 4. Generate -->
   <div class="panel">
-    <div class="panel-label">3 — Generate</div>
+    <div class="panel-label">4 — Generate</div>
     <div class="action-row">
       <button class="btn btn-primary" id="btnGenerate" disabled>Generate</button>
       <button class="btn btn-secondary" id="btnClear">Clear All</button>
@@ -560,9 +566,9 @@
     </div>
   </div>
 
-  <!-- 4a. A→B Profile output -->
+  <!-- 5a. A→B Profile output -->
   <div class="panel output-panel" id="profilePanel">
-    <div class="panel-label">4 — Elevation Profile</div>
+    <div class="panel-label">5 — Elevation Profile</div>
     <div class="profile-header-row">
       <div class="profile-stats">
         <div class="stat"><span class="stat-label">Distance</span><span class="stat-value" id="statDist">—</span></div>
@@ -575,11 +581,11 @@
     </div>
     <div class="profile-options">
       <div class="option-group">
-        <label>Start tower (m)</label>
+        <label>Observer tower (m)</label>
         <input type="number" id="startTowerHeight" value="10" min="0" step="1" />
       </div>
       <div class="option-group">
-        <label>End tower (m)</label>
+        <label>Remote tower (m)</label>
         <input type="number" id="endTowerHeight" value="10" min="0" step="1" />
       </div>
       <div class="option-group">
@@ -617,9 +623,9 @@
     </div>
   </div>
 
-  <!-- 4b. Radial output -->
+  <!-- 5b. Radial output -->
   <div class="panel output-panel" id="radialPanel">
-    <div class="panel-label">4 — Radial Line-of-Sight</div>
+    <div class="panel-label">5 — Radial Line-of-Sight</div>
     <div class="profile-header-row">
       <div class="profile-stats">
         <div class="stat"><span class="stat-label">Radius</span><span class="stat-value" id="rStatRadius">—</span></div>
@@ -680,6 +686,7 @@ let radialData   = [];    // radial: [{bearing, visible, visibleDist, blockElev,
 let currentMode  = 'ab';  // 'ab' | 'radial'
 let cachedLOS    = null;  // last LOS result for resize redraws
 let filesLoading = 0;     // track number of files being loaded
+let settingObserverFromMap = false;  // whether we're in "click map to set observer" mode
 
 /* ═══════════════════════════════════════════════════════════
    INDEXEDDB HELPERS (for large HGT files)
@@ -879,7 +886,7 @@ const abSamplesWrap= document.getElementById('abSamplesWrap');
 loadInputsFromStorage();
 
 // Auto-save inputs on change
-['startLat','startLng','endLat','endLng','radLat','radLng','radRadius','startTowerHeight','endTowerHeight','treeHeight','radObsHeight','radMaxTowerHeight'].forEach(id => {
+['obsLat','obsLng','obsHeight','endLat','endLng','radRadius','startTowerHeight','endTowerHeight','treeHeight','radMaxTowerHeight'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', saveInputsToStorage);
 });
@@ -1141,6 +1148,11 @@ function drawTerrainMap(canvas = mapCanvas, ctx = mctx, centerLat = null, center
     const cx = W * (centerLng - minLng) / lngRange;
     const cy = H * (1 - (centerLat - minLat) / latRange);
     
+    // Store line segments for click detection (only for radial terrain map)
+    if (canvas === radMapCanvas) {
+      canvas._radialLines = [];
+    }
+    
     // Draw radial sight lines if data exists
     if (radialData && radialData.length > 0) {
       ctx.save();
@@ -1157,6 +1169,18 @@ function drawTerrainMap(canvas = mapCanvas, ctx = mctx, centerLat = null, center
         const endPoint = destPoint(centerLat, centerLng, ray.bearing, ray.visibleDist);
         const ex = W * (endPoint.lng - minLng) / lngRange;
         const ey = H * (1 - (endPoint.lat - minLat) / latRange);
+        
+        // Store line segment for click detection
+        if (canvas === radMapCanvas) {
+          canvas._radialLines.push({
+            x1: cx, y1: cy,
+            x2: ex, y2: ey,
+            bearing: ray.bearing,
+            endLat: endPoint.lat,
+            endLng: endPoint.lng,
+            centerLat, centerLng
+          });
+        }
         
         ctx.beginPath();
         ctx.moveTo(cx, cy);
@@ -1297,7 +1321,72 @@ function setupMapInteractions(canvas, hoverInfo, isRadial = false) {
     if (!frozen) hoverInfo.classList.remove('visible');
   });
 
-  canvas.addEventListener('click', () => {
+  canvas.addEventListener('click', e => {
+    // If we're in "set observer from map" mode, set the observer location
+    if (settingObserverFromMap && !isRadial) {
+      if (!canvas._mapParams) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      
+      const { minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY } = canvas._mapParams;
+      
+      const tx = (mx - W/2) / zoom - offsetX + W/2;
+      const ty = (my - H/2) / zoom - offsetY + H/2;
+      
+      if (tx >= 0 && tx <= W && ty >= 0 && ty <= H) {
+        const lng = minLng + (tx / W) * lngRange;
+        const lat = minLat + (1 - ty / H) * latRange;
+        
+        document.getElementById('obsLat').value = lat.toFixed(5);
+        document.getElementById('obsLng').value = lng.toFixed(5);
+        
+        settingObserverFromMap = false;
+        document.getElementById('btnSetFromMap').textContent = '📍 Click Map to Set';
+        canvas.style.cursor = 'default';
+        setStatus('Observer location set to ' + lat.toFixed(5) + ', ' + lng.toFixed(5), false);
+        
+        // Redraw map with observer marker
+        drawTerrainMap();
+      }
+      return;
+    }
+    
+    // If this is the radial terrain map and we have radial lines, check for line clicks
+    if (isRadial && canvas._radialLines && canvas._radialLines.length > 0) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      
+      // Find nearest line within threshold
+      let nearestLine = null;
+      let minDist = 10; // pixels threshold
+      
+      canvas._radialLines.forEach(line => {
+        const dist = distanceToLineSegment(mx, my, line.x1, line.y1, line.x2, line.y2);
+        if (dist < minDist) {
+          minDist = dist;
+          nearestLine = line;
+        }
+      });
+      
+      if (nearestLine) {
+        // Generate A→B profile for this bearing
+        document.getElementById('endLat').value = nearestLine.endLat.toFixed(5);
+        document.getElementById('endLng').value = nearestLine.endLng.toFixed(5);
+        
+        setStatus(`Generating profile for bearing ${nearestLine.bearing.toFixed(1)}°...`, false);
+        
+        // Switch to A→B mode and generate profile
+        setTimeout(() => {
+          generateProfile();
+        }, 10);
+        
+        return;
+      }
+    }
+    
     frozen = !frozen;
     if (frozen) {
       hoverInfo.classList.add('frozen');
@@ -1310,6 +1399,7 @@ function setupMapInteractions(canvas, hoverInfo, isRadial = false) {
   // Pan functionality (only for main map)
   if (!isRadial) {
     canvas.addEventListener('mousedown', e => {
+      if (settingObserverFromMap) return; // Don't pan when setting observer
       mapIsPanning = true;
       mapLastX = e.clientX;
       mapLastY = e.clientY;
@@ -1350,6 +1440,21 @@ function setupMapInteractions(canvas, hoverInfo, isRadial = false) {
 
 setupMapInteractions(mapCanvas, mapHoverInfo, false);
 if (radMapCanvas) setupMapInteractions(radMapCanvas, radMapHoverInfo, true);
+
+// Observer location "Set from Map" button
+document.getElementById('btnSetFromMap')?.addEventListener('click', () => {
+  settingObserverFromMap = !settingObserverFromMap;
+  const btn = document.getElementById('btnSetFromMap');
+  if (settingObserverFromMap) {
+    btn.textContent = '❌ Cancel';
+    mapCanvas.style.cursor = 'crosshair';
+    setStatus('Click on the terrain map to set observer location', false);
+  } else {
+    btn.textContent = '📍 Click Map to Set';
+    mapCanvas.style.cursor = 'default';
+    setStatus('', false);
+  }
+});
 
 // Minimap click to navigate
 minimapCanvas.addEventListener('click', e => {
@@ -1450,6 +1555,33 @@ function destPoint(lat, lng, bearingDeg, distKm) {
   const lat2 = Math.asin(Math.sin(lat1)*Math.cos(d) + Math.cos(lat1)*Math.sin(d)*Math.cos(brng));
   const lng2 = lng1 + Math.atan2(Math.sin(brng)*Math.sin(d)*Math.cos(lat1), Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
   return { lat: lat2 * RAD2DEG, lng: lng2 * RAD2DEG };
+}
+
+// Calculate distance from point (px, py) to line segment (x1, y1) to (x2, y2)
+function distanceToLineSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSquared = dx * dx + dy * dy;
+  
+  if (lengthSquared === 0) {
+    // Line segment is a point
+    const dpx = px - x1;
+    const dpy = py - y1;
+    return Math.sqrt(dpx * dpx + dpy * dpy);
+  }
+  
+  // Calculate projection parameter t
+  let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+  t = Math.max(0, Math.min(1, t)); // Clamp to [0,1]
+  
+  // Find closest point on segment
+  const closestX = x1 + t * dx;
+  const closestY = y1 + t * dy;
+  
+  // Return distance to closest point
+  const dpx = px - closestX;
+  const dpy = py - closestY;
+  return Math.sqrt(dpx * dpx + dpy * dpy);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1691,12 +1823,12 @@ document.getElementById('btnUpdateProfile')?.addEventListener('click', () => {
    A → B  PROFILE
    ═══════════════════════════════════════════════════════════ */
 function generateProfile() {
-  const sLat = parseFloat(document.getElementById('startLat').value);
-  const sLng = parseFloat(document.getElementById('startLng').value);
+  const sLat = parseFloat(document.getElementById('obsLat').value);
+  const sLng = parseFloat(document.getElementById('obsLng').value);
   const eLat = parseFloat(document.getElementById('endLat').value);
   const eLng = parseFloat(document.getElementById('endLng').value);
 
-  if ([sLat, sLng, eLat, eLng].some(isNaN)) { setStatus('All coordinate fields are required.', true); return; }
+  if ([sLat, sLng, eLat, eLng].some(isNaN)) { setStatus('Observer and target coordinates are required.', true); return; }
   if (sLat<-90||sLat>90||eLat<-90||eLat>90) { setStatus('Latitude must be −90 … 90.', true); return; }
   if (sLng<-180||sLng>180||eLng<-180||eLng>180) { setStatus('Longitude must be −180 … 180.', true); return; }
 
@@ -2130,16 +2262,16 @@ canvas.addEventListener('mouseleave', () => tooltip.classList.remove('visible'))
    RADIAL LOS
    ═══════════════════════════════════════════════════════════ */
 function generateRadial() {
-  const lat     = parseFloat(document.getElementById('radLat').value);
-  const lng     = parseFloat(document.getElementById('radLng').value);
+  const lat     = parseFloat(document.getElementById('obsLat').value);
+  const lng     = parseFloat(document.getElementById('obsLng').value);
   const radius  = parseFloat(document.getElementById('radRadius').value);
   const angRes  = parseFloat(document.getElementById('radAngRes').value);
   const samples = parseInt(document.getElementById('radSamples').value);
-  const obsH    = parseFloat(document.getElementById('radObsHeight').value) || 0;
+  const obsH    = parseFloat(document.getElementById('obsHeight').value) || 0;
   const remoteH = parseFloat(document.getElementById('radMaxTowerHeight').value) || 0;
   const showHeatmap = document.getElementById('showRadialHeatmap')?.checked || false;
 
-  if (isNaN(lat)||isNaN(lng)||isNaN(radius)) { setStatus('Lat, Lng and Radius are required.', true); return; }
+  if (isNaN(lat)||isNaN(lng)||isNaN(radius)) { setStatus('Observer location and radius are required.', true); return; }
   if (radius <= 0) { setStatus('Radius must be > 0.', true); return; }
 
   const obsElev = getElevation(lat, lng);
