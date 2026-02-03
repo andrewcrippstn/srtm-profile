@@ -5,3 +5,5 @@
 update observer location when manually input changed.
 
 
+Future
+allow drag and drop of observer and remore end in path profile to update gps location.
