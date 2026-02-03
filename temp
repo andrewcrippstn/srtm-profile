@@ -1,0 +1,8 @@
+can you implement the following:
+
+1) when the hgt data is loaded can you use it to plot a map of the data.
+
+2) update the elevation profile to be able to select between lines indicating what size tower would need to be built at each location to be able to get line of site.  Also another option showing the smallest combined tower height at each location to be able to get line of site.  also can you have the option of another line on the profile from a user input tower height at each end. default to 10m each end. Also include a user input for tree height along the route, default to 5m.
+
+
+4) i also want an option on the radial line of sight that will draw a radial heat map showing line of sites based on increasing tower sizes (up to 50m editable by the user)
