@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SRTM Terrain Profile</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --bg-panel: #111418;
+    --bg-input: #161a22;
+    --border: #2a3040;
+    --border-focus: #4e9fff;
+    --text: #c8d0dc;
+    --text-dim: #606878;
+    --accent: #4e9fff;
+    --accent-warm: #ffb340;
+    --accent-green: #4effa0;
+    --danger: #ff5c5c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Header ─── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px 24px;
+    background: var(--bg-panel);
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.4;
+  }
+  .header-inner { max-width: 1100px; margin: 0 auto; display: flex; align-items: flex-end; gap: 24px; }
+  h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.6rem; letter-spacing: -0.02em; color: #fff; line-height: 1.1; }
+  h1 span { color: var(--accent); }
+  .header-sub { font-size: 0.72rem; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-left: auto; }
+
+  /* ─── Layout ─── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 28px 40px 60px; }
+
+  /* ─── Panels ─── */
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+    margin-bottom: 20px;
+  }
+  .panel-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-label::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  /* ─── Mode toggle ─── */
+  .mode-toggle {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    width: fit-content;
+    margin-bottom: 18px;
+  }
+  .mode-btn {
+    font-family: inherit;
+    font-size: 0.74rem;
+    letter-spacing: 0.06em;
+    padding: 7px 18px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .mode-btn:hover { color: var(--text); }
+  .mode-btn.active {
+    background: var(--accent);
+    color: #0a0c0f;
+    font-weight: 500;
+  }
+
+  /* ─── Drop zone ─── */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--bg-input);
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: rgba(78,159,255,0.04); }
+  .dropzone input { display: none; }
+  .dropzone .dz-icon { font-size: 1.8rem; margin-bottom: 8px; opacity: 0.5; }
+  .dropzone .dz-text { font-size: 0.78rem; color: var(--text-dim); }
+  .dropzone .dz-text em { color: var(--accent); font-style: normal; }
+
+  /* ─── Tile tags ─── */
+  .tile-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .tile-tag {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 0.73rem;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tile-tag .tag-name { color: var(--accent-warm); font-weight: 500; }
+  .tile-tag .tag-res { color: var(--text-dim); font-size: 0.65rem; }
+  .tile-tag .tag-remove { cursor: pointer; color: var(--text-dim); font-size: 0.9rem; line-height: 1; transition: color 0.15s; }
+  .tile-tag .tag-remove:hover { color: var(--danger); }
+
+  /* ─── Mode sections ─── */
+  .mode-section { display: none; }
+  .mode-section.active { display: block; }
+
+  /* ─── Coordinates ─── */
+  .coord-row { display: grid; grid-template-columns: 1fr 40px 1fr; gap: 12px; align-items: end; }
+  .coord-block .coord-label { font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+  .coord-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .input-wrap label { display: block; font-size: 0.62rem; color: var(--text-dim); margin-bottom: 3px; letter-spacing: 0.06em; }
+  .input-wrap input, .input-wrap select {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 8px 10px;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  .input-wrap input:focus, .input-wrap select:focus { border-color: var(--border-focus); }
+
+  .arrow-col { display: flex; align-items: center; justify-content: center; padding-bottom: 12px; }
+  .arrow-col span { color: var(--accent); font-size: 1.3rem; opacity: 0.7; }
+
+  /* ─── Radial inputs ─── */
+  .radial-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  /* ─── Action row ─── */
+  .action-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    font-family: inherit;
+    font-size: 0.76rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 22px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn-primary { background: var(--accent); color: #0a0c0f; font-weight: 500; box-shadow: 0 2px 12px rgba(78,159,255,0.25); }
+  .btn-primary:hover { background: #6aadff; box-shadow: 0 2px 18px rgba(78,159,255,0.35); }
+  .btn-primary:disabled { background: #2a3a50; color: var(--text-dim); box-shadow: none; cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+
+  .status-msg { font-size: 0.72rem; color: var(--text-dim); flex: 1; }
+  .status-msg.err { color: var(--danger); }
+  .status-msg.ok { color: var(--accent-green); }
+
+  .samples-wrap { display: flex; align-items: center; gap: 10px; }
+  .samples-wrap label { font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.06em; }
+  .samples-wrap select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 5px 8px;
+    outline: none;
+  }
+
+  /* ─── Output panels ─── */
+  .output-panel { display: none; }
+  .output-panel.visible { display: block; }
+
+  .profile-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+  .profile-stats { display: flex; gap: 24px; flex-wrap: wrap; }
+  .stat { display: flex; flex-direction: column; }
+  .stat-label { font-size: 0.6rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; }
+  .stat-value { font-size: 0.88rem; color: #fff; font-weight: 500; margin-top: 2px; }
+  .stat-value .unit { color: var(--text-dim); font-size: 0.68rem; margin-left: 3px; }
+
+  canvas {
+    display: block;
+    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    cursor: crosshair;
+  }
+  #profileCanvas { width: 100%; }
+
+  .canvas-wrap { position: relative; }
+  .tooltip {
+    position: absolute;
+    background: rgba(17,20,24,0.92);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 11px;
+    font-size: 0.7rem;
+    color: var(--text);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+    z-index: 10;
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .tt-elev { color: var(--accent); font-weight: 500; }
+  .tooltip .tt-dist { color: var(--text-dim); }
+
+  .export-row { margin-top: 14px; display: flex; gap: 10px; }
+
+  /* ─── Radial layout ─── */
+  .radial-output-layout {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 780px) {
+    .radial-output-layout { grid-template-columns: 1fr; }
+  }
+  .radial-polar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  #radialCanvas { width: 400px; height: 400px; }
+  .radial-legend {
+    display: flex;
+    gap: 18px;
+    margin-top: 12px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+  .radial-legend .leg-swatch {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    display: inline-block;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  .radial-table-wrap { overflow-x: auto; }
+  .radial-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+  .radial-table th {
+    text-align: left;
+    color: var(--text-dim);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.62rem;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 8px;
+  }
+  .radial-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid rgba(42,48,64,0.5);
+    color: var(--text);
+  }
+  .radial-table tr:hover td { background: rgba(78,159,255,0.04); }
+  .radial-table .vis { color: var(--accent-green); font-weight: 500; }
+  .radial-table .blk { color: var(--danger); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div><h1>SRTM <span>Terrain Profile</span></h1></div>
+    <div class="header-sub">elevation · line of sight</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- 1. Load tiles -->
+  <div class="panel">
+    <div class="panel-label">1 — Load HGT Tiles</div>
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".hgt" multiple />
+      <div class="dz-icon">⬇</div>
+      <div class="dz-text">Drop <em>.hgt</em> files here or <em>click to browse</em></div>
+    </div>
+    <div class="tile-list" id="tileList"></div>
+  </div>
+
+  <!-- 2. Mode + inputs -->
+  <div class="panel">
+    <div class="panel-label">2 — Configure</div>
+
+    <!-- mode toggle -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" data-mode="ab">A → B Profile</button>
+      <button class="mode-btn" data-mode="radial">Radial Line-of-Sight</button>
+    </div>
+
+    <!-- A→B inputs -->
+    <div class="mode-section active" id="section-ab">
+      <div class="coord-row">
+        <div class="coord-block">
+          <div class="coord-label">▸ Start</div>
+          <div class="coord-fields">
+            <div class="input-wrap"><label>Latitude</label><input type="text" id="startLat" placeholder="e.g. 48.8566" /></div>
+            <div class="input-wrap"><label>Longitude</label><input type="text" id="startLng" placeholder="e.g. 2.3522" /></div>
+          </div>
+        </div>
+        <div class="arrow-col"><span>→</span></div>
+        <div class="coord-block">
+          <div class="coord-label">▸ End</div>
+          <div class="coord-fields">
+            <div class="input-wrap"><label>Latitude</label><input type="text" id="endLat" placeholder="e.g. 48.9566" /></div>
+            <div class="input-wrap"><label>Longitude</label><input type="text" id="endLng" placeholder="e.g. 2.4522" /></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Radial inputs -->
+    <div class="mode-section" id="section-radial">
+      <div class="radial-row">
+        <div class="input-wrap"><label>Latitude</label><input type="text" id="radLat" placeholder="e.g. 48.8566" /></div>
+        <div class="input-wrap"><label>Longitude</label><input type="text" id="radLng" placeholder="e.g. 2.3522" /></div>
+        <div class="input-wrap"><label>Radius (km)</label><input type="text" id="radRadius" placeholder="e.g. 10" /></div>
+      </div>
+      <div style="display:flex; gap:16px; margin-top:14px; flex-wrap:wrap;">
+        <div class="input-wrap" style="width:160px;">
+          <label>Angular resolution (°)</label>
+          <select id="radAngRes">
+            <option value="0.5">0.5°  (720 rays)</option>
+            <option value="1" selected>1°   (360 rays)</option>
+            <option value="2">2°   (180 rays)</option>
+            <option value="5">5°   (72 rays)</option>
+          </select>
+        </div>
+        <div class="input-wrap" style="width:160px;">
+          <label>Samples per ray</label>
+          <select id="radSamples">
+            <option value="200">200</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1 000</option>
+          </select>
+        </div>
+        <div class="input-wrap" style="width:140px;">
+          <label>Observer height (m)</label>
+          <input type="text" id="radObsHeight" value="0" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Generate -->
+  <div class="panel">
+    <div class="panel-label">3 — Generate</div>
+    <div class="action-row">
+      <button class="btn btn-primary" id="btnGenerate" disabled>Generate</button>
+      <button class="btn btn-secondary" id="btnClear">Clear All</button>
+      <div class="samples-wrap" id="abSamplesWrap">
+        <label>Samples</label>
+        <select id="sampleCount">
+          <option value="500">500</option>
+          <option value="1000" selected>1 000</option>
+          <option value="2000">2 000</option>
+          <option value="5000">5 000</option>
+        </select>
+      </div>
+      <div class="status-msg" id="statusMsg"></div>
+    </div>
+  </div>
+
+  <!-- 4a. A→B Profile output -->
+  <div class="panel output-panel" id="profilePanel">
+    <div class="panel-label">4 — Elevation Profile</div>
+    <div class="profile-header-row">
+      <div class="profile-stats">
+        <div class="stat"><span class="stat-label">Distance</span><span class="stat-value" id="statDist">—</span></div>
+        <div class="stat"><span class="stat-label">Max Elev</span><span class="stat-value" id="statMax">—</span></div>
+        <div class="stat"><span class="stat-label">Min Elev</span><span class="stat-value" id="statMin">—</span></div>
+        <div class="stat"><span class="stat-label">Start Elev</span><span class="stat-value" id="statStart">—</span></div>
+        <div class="stat"><span class="stat-label">End Elev</span><span class="stat-value" id="statEnd">—</span></div>
+        <div class="stat"><span class="stat-label">LOS</span><span class="stat-value" id="statLOS">—</span></div>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="profileCanvas" height="320"></canvas>
+      <div class="tooltip" id="tooltip">
+        <span class="tt-elev" id="ttElev">0 m</span>
+        <span class="tt-dist" id="ttDist"> · 0 km</span>
+      </div>
+    </div>
+    <div class="export-row">
+      <button class="btn btn-secondary" id="btnExportCSV">⬇ Export CSV</button>
+      <button class="btn btn-secondary" id="btnExportPNG">⬇ Export PNG</button>
+    </div>
+  </div>
+
+  <!-- 4b. Radial output -->
+  <div class="panel output-panel" id="radialPanel">
+    <div class="panel-label">4 — Radial Line-of-Sight</div>
+    <div class="profile-header-row">
+      <div class="profile-stats">
+        <div class="stat"><span class="stat-label">Radius</span><span class="stat-value" id="rStatRadius">—</span></div>
+        <div class="stat"><span class="stat-label">Rays cast</span><span class="stat-value" id="rStatRays">—</span></div>
+        <div class="stat"><span class="stat-label">Visible</span><span class="stat-value" id="rStatVis">—</span></div>
+        <div class="stat"><span class="stat-label">Blocked</span><span class="stat-value" id="rStatBlk">—</span></div>
+        <div class="stat"><span class="stat-label">Obs. Elev</span><span class="stat-value" id="rStatObsElev">—</span></div>
+      </div>
+    </div>
+    <div class="radial-output-layout">
+      <div class="radial-polar-wrap">
+        <div class="canvas-wrap">
+          <canvas id="radialCanvas" width="400" height="400"></canvas>
+          <div class="tooltip" id="radTooltip">
+            <span class="tt-elev" id="rttBearing">0°</span>
+            <span class="tt-dist" id="rttDist"> · 0 km</span>
+          </div>
+        </div>
+        <div class="radial-legend">
+          <span><span class="leg-swatch" style="background:#4effa0;"></span>Visible</span>
+          <span><span class="leg-swatch" style="background:#ff5c5c;"></span>Blocked</span>
+          <span><span class="leg-swatch" style="background:#ffb340;"></span>Observer</span>
+        </div>
+      </div>
+      <div class="radial-table-wrap">
+        <table class="radial-table" id="radialTable">
+          <thead><tr><th>Bearing</th><th>Status</th><th>Visible dist</th><th>Block elev</th></tr></thead>
+          <tbody id="radialTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="export-row">
+      <button class="btn btn-secondary" id="btnExportRadialPNG">⬇ Export PNG</button>
+      <button class="btn btn-secondary" id="btnExportRadialCSV">⬇ Export CSV</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════ */
+const tiles = {};
+let profileData  = [];    // A→B: [{dist, elev}]
+let radialData   = [];    // radial: [{bearing, visible, visibleDist, blockElev, blockDist}]
+let currentMode  = 'ab';  // 'ab' | 'radial'
+let cachedLOS    = null;  // last LOS result for resize redraws
+
+/* ═══════════════════════════════════════════════════════════
+   DOM REFS
+   ═══════════════════════════════════════════════════════════ */
+const dropzone     = document.getElementById('dropzone');
+const fileInput    = document.getElementById('fileInput');
+const tileList     = document.getElementById('tileList');
+const btnGen       = document.getElementById('btnGenerate');
+const btnClear     = document.getElementById('btnClear');
+const statusMsg    = document.getElementById('statusMsg');
+
+const profilePanel = document.getElementById('profilePanel');
+const canvas       = document.getElementById('profileCanvas');
+const ctx          = canvas.getContext('2d');
+const tooltip      = document.getElementById('tooltip');
+
+const radialPanel  = document.getElementById('radialPanel');
+const radCanvas    = document.getElementById('radialCanvas');
+const rctx         = radCanvas.getContext('2d');
+const radTooltip   = document.getElementById('radTooltip');
+
+const abSamplesWrap= document.getElementById('abSamplesWrap');
+
+/* ═══════════════════════════════════════════════════════════
+   MODE TOGGLE
+   ═══════════════════════════════════════════════════════════ */
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentMode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.getElementById('section-ab').classList.toggle('active', currentMode === 'ab');
+    document.getElementById('section-radial').classList.toggle('active', currentMode === 'radial');
+    abSamplesWrap.style.display = currentMode === 'ab' ? 'flex' : 'none';
+    // hide outputs when switching
+    profilePanel.classList.remove('visible');
+    radialPanel.classList.remove('visible');
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   DROPZONE / FILE LOADING
+   ═══════════════════════════════════════════════════════════ */
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('dragover'); loadFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => loadFiles(e.target.files));
+
+function loadFiles(files) {
+  [...files].forEach(file => {
+    if (!file.name.toLowerCase().endsWith('.hgt')) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const buf   = ev.target.result;
+      const count = buf.byteLength / 2;
+      let size;
+      if      (count === 1201 * 1201) size = 1201;
+      else if (count === 3601 * 3601) size = 3601;
+      else { setStatus(`${file.name}: unrecognised size (${count} samples)`, true); return; }
+
+      const view = new DataView(buf);
+      const arr  = new Int16Array(count);
+      for (let i = 0; i < count; i++) arr[i] = view.getInt16(i * 2, false);
+
+      const key = parseTileKey(file.name);
+      if (!key) { setStatus(`${file.name}: bad filename`, true); return; }
+      tiles[key] = { data: arr, size };
+      renderTileTags();
+      updateBtn();
+      setStatus(`Loaded ${file.name} (${size === 1201 ? '3″' : '1″'} · ${key})`, false);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  fileInput.value = '';
+}
+
+function parseTileKey(name) {
+  const m = name.match(/^([NS])(\d+)([EW])(\d+)\.hgt$/i);
+  if (!m) return null;
+  const lat = parseInt(m[2]) * (m[1].toUpperCase() === 'N' ? 1 : -1);
+  const lng = parseInt(m[4]) * (m[3].toUpperCase() === 'E' ? 1 : -1);
+  return tileKeyFromCoord(lat, lng);
+}
+
+function tileKeyFromCoord(latBase, lngBase) {
+  const ns = latBase >= 0 ? 'N' : 'S';
+  const ew = lngBase >= 0 ? 'E' : 'W';
+  return `${ns}${String(Math.abs(latBase)).padStart(2,'0')}${ew}${String(Math.abs(lngBase)).padStart(3,'0')}`;
+}
+
+function renderTileTags() {
+  tileList.innerHTML = '';
+  Object.keys(tiles).forEach(key => {
+    const t   = tiles[key];
+    const tag = document.createElement('div');
+    tag.className = 'tile-tag';
+    tag.innerHTML = `<span class="tag-name">${key}</span><span class="tag-res">${t.size === 1201 ? '3″' : '1″'}</span><span class="tag-remove" data-key="${key}">✕</span>`;
+    tileList.appendChild(tag);
+  });
+  tileList.querySelectorAll('.tag-remove').forEach(el => {
+    el.addEventListener('click', () => { delete tiles[el.dataset.key]; renderTileTags(); updateBtn(); });
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ELEVATION LOOKUP  (bilinear)
+   ═══════════════════════════════════════════════════════════ */
+function getElevation(lat, lng) {
+  const latBase = Math.floor(lat);
+  const lngBase = Math.floor(lng);
+  const key     = tileKeyFromCoord(latBase, lngBase);
+  const tile    = tiles[key];
+  if (!tile) return null;
+
+  const size = tile.size;
+  const res  = 1 / (size - 1);
+  const rowF = (latBase + 1 - lat) / res;
+  const colF = (lng - lngBase)     / res;
+
+  const r0 = Math.floor(rowF), c0 = Math.floor(colF);
+  const r1 = Math.min(r0 + 1, size - 1), c1 = Math.min(c0 + 1, size - 1);
+  const fr = rowF - r0, fc = colF - c0;
+
+  const idx = (r, c) => r * size + c;
+  const v00 = tile.data[idx(r0, c0)];
+  const v10 = tile.data[idx(r1, c0)];
+  const v01 = tile.data[idx(r0, c1)];
+  const v11 = tile.data[idx(r1, c1)];
+
+  if (v00 === -32768 || v10 === -32768 || v01 === -32768 || v11 === -32768) return null;
+
+  return v00*(1-fr)*(1-fc) + v10*fr*(1-fc) + v01*(1-fr)*fc + v11*fr*fc;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GEO HELPERS
+   ═══════════════════════════════════════════════════════════ */
+const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
+const EARTH_R = 6371; // km
+
+function haversine(lat1, lng1, lat2, lng2) {
+  const dLat = (lat2-lat1)*DEG2RAD, dLng = (lng2-lng1)*DEG2RAD;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*DEG2RAD)*Math.cos(lat2*DEG2RAD)*Math.sin(dLng/2)**2;
+  return EARTH_R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function interpolateLine(lat1, lng1, lat2, lng2, t) {
+  return { lat: lat1+(lat2-lat1)*t, lng: lng1+(lng2-lng1)*t };
+}
+
+// Given a centre, bearing (deg, 0=N cw), distance in km → destination lat/lng
+function destPoint(lat, lng, bearingDeg, distKm) {
+  const lat1 = lat * DEG2RAD;
+  const lng1 = lng * DEG2RAD;
+  const brng = bearingDeg * DEG2RAD;
+  const d    = distKm / EARTH_R;
+
+  const lat2 = Math.asin(Math.sin(lat1)*Math.cos(d) + Math.cos(lat1)*Math.sin(d)*Math.cos(brng));
+  const lng2 = lng1 + Math.atan2(Math.sin(brng)*Math.sin(d)*Math.cos(lat1), Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
+  return { lat: lat2 * RAD2DEG, lng: lng2 * RAD2DEG };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LINE-OF-SIGHT CHECK  (single ray)
+   Returns { visible: bool, visibleDist: km, blockElev: m|null, blockDist: km|null }
+   ═══════════════════════════════════════════════════════════ */
+function checkLOS(obsLat, obsLng, obsElev, targetLat, targetLng, samples) {
+  const totalDist = haversine(obsLat, obsLng, targetLat, targetLng);
+  // elevation of the target
+  const targElev = getElevation(targetLat, targetLng);
+
+  let maxSlope = -Infinity;   // max slope seen so far (rise / run in m / m)
+  let blockDist = null, blockElev = null;
+
+  for (let i = 1; i <= samples; i++) {
+    const t     = i / samples;
+    const pt    = interpolateLine(obsLat, obsLng, targetLat, targetLng, t);
+    const elev  = getElevation(pt.lat, pt.lng);
+    if (elev === null) continue;
+
+    const d = totalDist * t * 1000; // metres along path
+    if (d === 0) continue;
+
+    // slope from observer to this sample
+    const slope = (elev - obsElev) / d;
+
+    if (slope > maxSlope) {
+      maxSlope = slope;
+    }
+
+    // The point is blocked if its elevation is above the line of sight
+    // drawn from observer with the current max slope
+    // i.e. if this point itself creates a *new* max slope, it might be the blocker for later points
+  }
+
+  // Second pass: walk forward, track max slope = the "horizon". If any later point is above that horizon it is blocked.
+  maxSlope = -Infinity;
+  let lastVisibleDist = 0;
+
+  for (let i = 1; i <= samples; i++) {
+    const t    = i / samples;
+    const pt   = interpolateLine(obsLat, obsLng, targetLat, targetLng, t);
+    const elev = getElevation(pt.lat, pt.lng);
+    if (elev === null) continue;
+
+    const d     = totalDist * t * 1000; // metres
+    const slope = (elev - obsElev) / d;
+
+    if (slope > maxSlope) {
+      // this point is on or above the horizon → visible, and becomes new horizon
+      maxSlope = slope;
+      lastVisibleDist = totalDist * t; // km
+    }
+    // if slope <= maxSlope the point is below the current horizon → blocked by earlier ridge
+  }
+
+  // target is visible if the target's own slope >= maxSlope established before it
+  // Simpler: re-walk and check the target specifically
+  let horizonBeforeTarget = -Infinity;
+  for (let i = 1; i < samples; i++) {
+    const t    = i / samples;
+    const pt   = interpolateLine(obsLat, obsLng, targetLat, targetLng, t);
+    const elev = getElevation(pt.lat, pt.lng);
+    if (elev === null) continue;
+    const d = totalDist * t * 1000;
+    const slope = (elev - obsElev) / d;
+    if (slope > horizonBeforeTarget) horizonBeforeTarget = slope;
+  }
+
+  const targSlope = targElev !== null ? (targElev - obsElev) / (totalDist * 1000) : null;
+  const visible = targElev !== null && targSlope >= horizonBeforeTarget;
+
+  if (!visible && targElev !== null) {
+    // find the first blocker: the sample that set the horizon above the target slope
+    let runningMax = -Infinity;
+    for (let i = 1; i < samples; i++) {
+      const t    = i / samples;
+      const pt   = interpolateLine(obsLat, obsLng, targetLat, targetLng, t);
+      const elev = getElevation(pt.lat, pt.lng);
+      if (elev === null) continue;
+      const d = totalDist * t * 1000;
+      const slope = (elev - obsElev) / d;
+      if (slope > runningMax) {
+        runningMax = slope;
+        if (runningMax > targSlope) {
+          blockDist = totalDist * t;
+          blockElev = elev;
+          break;
+        }
+      }
+    }
+  }
+
+  return {
+    visible,
+    visibleDist: visible ? totalDist : (blockDist || lastVisibleDist),
+    blockElev,
+    blockDist
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GENERATE  (dispatcher)
+   ═══════════════════════════════════════════════════════════ */
+btnGen.addEventListener('click', () => {
+  if (currentMode === 'ab') generateProfile();
+  else                      generateRadial();
+});
+
+/* ═══════════════════════════════════════════════════════════
+   A → B  PROFILE
+   ═══════════════════════════════════════════════════════════ */
+function generateProfile() {
+  const sLat = parseFloat(document.getElementById('startLat').value);
+  const sLng = parseFloat(document.getElementById('startLng').value);
+  const eLat = parseFloat(document.getElementById('endLat').value);
+  const eLng = parseFloat(document.getElementById('endLng').value);
+
+  if ([sLat, sLng, eLat, eLng].some(isNaN)) { setStatus('All coordinate fields are required.', true); return; }
+  if (sLat<-90||sLat>90||eLat<-90||eLat>90) { setStatus('Latitude must be −90 … 90.', true); return; }
+  if (sLng<-180||sLng>180||eLng<-180||eLng>180) { setStatus('Longitude must be −180 … 180.', true); return; }
+
+  const N    = parseInt(document.getElementById('sampleCount').value);
+  const dist = haversine(sLat, sLng, eLat, eLng);
+  profileData = [];
+  let voidCount = 0;
+
+  for (let i = 0; i <= N; i++) {
+    const t    = i / N;
+    const pt   = interpolateLine(sLat, sLng, eLat, eLng, t);
+    const elev = getElevation(pt.lat, pt.lng);
+    const d    = dist * t;
+    if (elev === null) { voidCount++; profileData.push({ dist: d, elev: null }); }
+    else               { profileData.push({ dist: d, elev }); }
+  }
+
+  if (profileData.every(p => p.elev === null)) { setStatus('No elevation data — check tiles are loaded.', true); return; }
+
+  // LOS check: observer = start elevation, target = end elevation
+  const startElev = profileData.find(p => p.elev !== null)?.elev ?? 0;
+  const losResult = checkLOS(sLat, sLng, startElev, eLat, eLng, N);
+
+  if (voidCount > 0) setStatus(`Profile generated · ${voidCount} void samples skipped.`, false);
+  else               setStatus(`Profile generated · ${N+1} samples · ${dist.toFixed(2)} km`, false);
+
+  cachedLOS = losResult;
+  updateProfileStats(dist, losResult);
+  radialPanel.classList.remove('visible');
+  profilePanel.classList.add('visible');
+  drawProfile(losResult);
+}
+
+function updateProfileStats(dist, los) {
+  const elevs = profileData.filter(p => p.elev !== null).map(p => p.elev);
+  document.getElementById('statDist').innerHTML  = `${dist.toFixed(2)}<span class="unit">km</span>`;
+  document.getElementById('statMax').innerHTML   = `${Math.round(Math.max(...elevs))}<span class="unit">m</span>`;
+  document.getElementById('statMin').innerHTML   = `${Math.round(Math.min(...elevs))}<span class="unit">m</span>`;
+  document.getElementById('statStart').innerHTML = `${profileData[0].elev !== null ? Math.round(profileData[0].elev) : '—'}<span class="unit">m</span>`;
+  document.getElementById('statEnd').innerHTML   = `${profileData[profileData.length-1].elev !== null ? Math.round(profileData[profileData.length-1].elev) : '—'}<span class="unit">m</span>`;
+  const losEl = document.getElementById('statLOS');
+  if (los.visible) losEl.innerHTML = `<span style="color:var(--accent-green)">Clear</span>`;
+  else             losEl.innerHTML = `<span style="color:var(--danger)">Blocked @ ${los.blockDist ? los.blockDist.toFixed(2) : '?'}<span class="unit">km</span></span>`;
+}
+
+/* ─── DRAW PROFILE ─────────────────────────────────────── */
+function drawProfile(los) {
+  const dpr  = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const W    = rect.width || 1060;
+  const H    = 320;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 30, right: 28, bottom: 40, left: 62 };
+  const pw  = W - pad.left - pad.right;
+  const ph  = H - pad.top  - pad.bottom;
+
+  const validPoints = profileData.filter(p => p.elev !== null);
+  const maxDist  = profileData[profileData.length-1].dist;
+  const minElev  = Math.min(...validPoints.map(p => p.elev));
+  const maxElev  = Math.max(...validPoints.map(p => p.elev));
+  const elevRange= maxElev - minElev || 1;
+  const padElev  = elevRange * 0.06;
+
+  const toX = d => pad.left + (d / maxDist) * pw;
+  const toY = e => pad.top  + ph - ((e - minElev + padElev) / (elevRange + padElev*2)) * ph;
+
+  ctx.clearRect(0, 0, W, H);
+
+  /* grid */
+  ctx.save();
+  ctx.font = '10px "IBM Plex Mono", monospace';
+  ctx.fillStyle = '#606878';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const elevStep  = niceStep(elevRange / 4);
+  const elevStart = Math.floor((minElev - padElev) / elevStep) * elevStep;
+  for (let e = elevStart; e <= maxElev + padElev; e += elevStep) {
+    const y = toY(e);
+    if (y < pad.top || y > H-pad.bottom) continue;
+    ctx.strokeStyle = (e%(elevStep*2)===0) ? 'rgba(78,159,255,0.15)' : 'rgba(78,159,255,0.07)';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W-pad.right, y); ctx.stroke();
+    ctx.fillText(Math.round(e)+' m', pad.left-8, y);
+  }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const distStep = niceStep(maxDist / 5);
+  for (let d = 0; d <= maxDist; d += distStep) {
+    const x = toX(d);
+    ctx.strokeStyle = 'rgba(78,159,255,0.07)';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, H-pad.bottom); ctx.stroke();
+    ctx.fillStyle = '#606878';
+    ctx.fillText(d.toFixed(1)+' km', x, H-pad.bottom+6);
+  }
+  ctx.restore();
+
+  /* filled area */
+  const grad = ctx.createLinearGradient(0, pad.top, 0, H-pad.bottom);
+  grad.addColorStop(0, 'rgba(78,159,255,0.40)');
+  grad.addColorStop(1, 'rgba(78,159,255,0.02)');
+
+  ctx.beginPath();
+  let started = false;
+  profileData.forEach(p => {
+    if (p.elev === null) { started = false; return; }
+    const x = toX(p.dist), y = toY(p.elev);
+    if (!started) { ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+  });
+  const lastValid  = [...profileData].reverse().find(p => p.elev !== null);
+  const firstValid = profileData.find(p => p.elev !== null);
+  if (lastValid && firstValid) {
+    ctx.lineTo(toX(lastValid.dist), H-pad.bottom);
+    ctx.lineTo(toX(firstValid.dist), H-pad.bottom);
+    ctx.closePath();
+  }
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  /* terrain stroke */
+  ctx.beginPath();
+  started = false;
+  profileData.forEach(p => {
+    if (p.elev === null) { started = false; return; }
+    const x = toX(p.dist), y = toY(p.elev);
+    if (!started) { ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle = '#4e9fff';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  /* ─── LINE OF SIGHT between start and end ─── */
+  if (firstValid && lastValid) {
+    const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev);
+    const x2 = toX(lastValid.dist),  y2 = toY(lastValid.elev);
+
+    // dashed style, colour depends on visibility
+    ctx.save();
+    ctx.setLineDash([8, 5]);
+    ctx.lineDashOffset = 0;
+
+    if (los && los.visible) {
+      ctx.strokeStyle = 'rgba(78,255,160,0.7)';
+    } else {
+      ctx.strokeStyle = 'rgba(255,92,92,0.7)';
+    }
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.restore();
+
+    // If blocked, mark the block point
+    if (los && !los.visible && los.blockDist !== null && los.blockElev !== null) {
+      const bx = toX(los.blockDist);
+      // the LOS line y at that x
+      const losYatBlock = y1 + (y2-y1) * ((los.blockDist - firstValid.dist) / (lastValid.dist - firstValid.dist));
+      // draw a small cross at the block point on the terrain
+      const by = toY(los.blockElev);
+      ctx.save();
+      ctx.strokeStyle = var_danger();
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(bx-6, by-6); ctx.lineTo(bx+6, by+6);
+      ctx.moveTo(bx+6, by-6); ctx.lineTo(bx-6, by+6);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /* start / end dots */
+  if (firstValid) {
+    ctx.beginPath();
+    ctx.arc(toX(firstValid.dist), toY(firstValid.elev), 5, 0, Math.PI*2);
+    ctx.fillStyle = '#4effa0'; ctx.fill();
+    ctx.strokeStyle = '#0a0c0f'; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+  if (lastValid) {
+    ctx.beginPath();
+    ctx.arc(toX(lastValid.dist), toY(lastValid.elev), 5, 0, Math.PI*2);
+    ctx.fillStyle = '#ffb340'; ctx.fill();
+    ctx.strokeStyle = '#0a0c0f'; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+
+  canvas._drawParams = { pad, pw, ph, toX, toY, minElev, maxElev, maxDist, elevRange, padElev };
+}
+
+function var_danger() { return '#ff5c5c'; }
+
+/* ─── PROFILE TOOLTIP ──────────────────────────────────── */
+canvas.addEventListener('mousemove', e => {
+  if (!canvas._drawParams || !profileData.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx   = e.clientX - rect.left;
+  const { pad, maxDist } = canvas._drawParams;
+  const pw = rect.width - pad.left - pad.right;
+  const d  = ((mx - pad.left) / pw) * maxDist;
+  if (d < 0 || d > maxDist) { tooltip.classList.remove('visible'); return; }
+
+  let closest = null, bestDiff = Infinity;
+  profileData.forEach(p => { if (p.elev===null) return; const diff=Math.abs(p.dist-d); if(diff<bestDiff){bestDiff=diff;closest=p;} });
+  if (!closest) { tooltip.classList.remove('visible'); return; }
+
+  document.getElementById('ttElev').textContent = Math.round(closest.elev)+' m';
+  document.getElementById('ttDist').textContent = ' · '+closest.dist.toFixed(2)+' km';
+  tooltip.style.left = (mx+14)+'px';
+  tooltip.style.top  = (e.clientY - rect.top - 20)+'px';
+  tooltip.classList.add('visible');
+});
+canvas.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+
+/* ═══════════════════════════════════════════════════════════
+   RADIAL LOS
+   ═══════════════════════════════════════════════════════════ */
+function generateRadial() {
+  const lat     = parseFloat(document.getElementById('radLat').value);
+  const lng     = parseFloat(document.getElementById('radLng').value);
+  const radius  = parseFloat(document.getElementById('radRadius').value);
+  const angRes  = parseFloat(document.getElementById('radAngRes').value);
+  const samples = parseInt(document.getElementById('radSamples').value);
+  const obsH    = parseFloat(document.getElementById('radObsHeight').value) || 0;
+
+  if (isNaN(lat)||isNaN(lng)||isNaN(radius)) { setStatus('Lat, Lng and Radius are required.', true); return; }
+  if (radius <= 0) { setStatus('Radius must be > 0.', true); return; }
+
+  const obsElev = getElevation(lat, lng);
+  if (obsElev === null) { setStatus('No elevation data at observer point — check tiles.', true); return; }
+
+  const totalObsElev = obsElev + obsH;
+  radialData = [];
+
+  // cast rays
+  const numRays = Math.round(360 / angRes);
+  let visCount = 0, blkCount = 0;
+
+  setStatus('Computing…', false);
+
+  // use setTimeout(0) to let the status paint, then compute
+  setTimeout(() => {
+    for (let i = 0; i < numRays; i++) {
+      const bearing = (i * angRes) % 360;
+      const target  = destPoint(lat, lng, bearing, radius);
+      const result  = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples);
+
+      radialData.push({
+        bearing,
+        visible:     result.visible,
+        visibleDist: result.visibleDist,
+        blockElev:   result.blockElev,
+        blockDist:   result.blockDist
+      });
+      if (result.visible) visCount++; else blkCount++;
+    }
+
+    setStatus(`Radial scan complete · ${numRays} rays · ${visCount} visible · ${blkCount} blocked`, false);
+
+    // stats
+    document.getElementById('rStatRadius').innerHTML  = `${radius.toFixed(1)}<span class="unit">km</span>`;
+    document.getElementById('rStatRays').textContent   = numRays;
+    document.getElementById('rStatVis').innerHTML     = `<span style="color:var(--accent-green)">${visCount}</span>`;
+    document.getElementById('rStatBlk').innerHTML     = `<span style="color:var(--danger)">${blkCount}</span>`;
+    document.getElementById('rStatObsElev').innerHTML = `${Math.round(totalObsElev)}<span class="unit">m</span>`;
+
+    profilePanel.classList.remove('visible');
+    radialPanel.classList.add('visible');
+
+    drawRadial(radius);
+    populateRadialTable();
+  }, 30);
+}
+
+/* ─── DRAW RADIAL POLAR ────────────────────────────────── */
+function drawRadial(radius) {
+  const dpr  = window.devicePixelRatio || 1;
+  const SIZE = 400;
+  radCanvas.width  = SIZE * dpr;
+  radCanvas.height = SIZE * dpr;
+  radCanvas.style.width  = SIZE + 'px';
+  radCanvas.style.height = SIZE + 'px';
+  rctx.scale(dpr, dpr);
+
+  const cx = SIZE / 2, cy = SIZE / 2;
+  const R  = SIZE / 2 - 24;  // max draw radius (px)
+
+  rctx.clearRect(0, 0, SIZE, SIZE);
+
+  /* background circle */
+  rctx.beginPath();
+  rctx.arc(cx, cy, R, 0, Math.PI*2);
+  rctx.fillStyle = 'rgba(10,12,15,0.6)';
+  rctx.fill();
+  rctx.strokeStyle = 'rgba(78,159,255,0.18)';
+  rctx.lineWidth = 1;
+  rctx.stroke();
+
+  /* range rings */
+  const ringCount = 4;
+  rctx.save();
+  rctx.font = '9px "IBM Plex Mono", monospace';
+  rctx.fillStyle = '#606878';
+  rctx.textAlign = 'center';
+  rctx.textBaseline = 'middle';
+  for (let i = 1; i <= ringCount; i++) {
+    const r = R * (i / ringCount);
+    rctx.beginPath();
+    rctx.arc(cx, cy, r, 0, Math.PI*2);
+    rctx.strokeStyle = (i === ringCount) ? 'rgba(78,159,255,0.2)' : 'rgba(78,159,255,0.08)';
+    rctx.lineWidth = 0.7;
+    rctx.stroke();
+    // label
+    const labelKm = (radius * i / ringCount).toFixed(1);
+    rctx.fillText(labelKm + ' km', cx, cy - r + 10);
+  }
+  rctx.restore();
+
+  /* cardinal labels */
+  rctx.save();
+  rctx.font = '11px "IBM Plex Mono", monospace';
+  rctx.fillStyle = 'rgba(200,208,220,0.7)';
+  rctx.textAlign = 'center';
+  rctx.textBaseline = 'middle';
+  rctx.fillText('N', cx, cy - R - 10);
+  rctx.fillText('S', cx, cy + R + 10);
+  rctx.textAlign = 'right';
+  rctx.fillText('W', cx - R - 8, cy);
+  rctx.textAlign = 'left';
+  rctx.fillText('E', cx + R + 8, cy);
+  rctx.restore();
+
+  /* cardinal cross-hairs */
+  rctx.save();
+  rctx.strokeStyle = 'rgba(78,159,255,0.12)';
+  rctx.lineWidth = 0.8;
+  rctx.setLineDash([4,4]);
+  [[cx,cy-R,cx,cy+R],[cx-R,cy,cx+R,cy]].forEach(([x1,y1,x2,y2]) => {
+    rctx.beginPath(); rctx.moveTo(x1,y1); rctx.lineTo(x2,y2); rctx.stroke();
+  });
+  rctx.restore();
+
+  /* ray wedges */
+  if (radialData.length > 0) {
+    const halfAngle = (radialData.length > 1)
+      ? (radialData[1].bearing - radialData[0].bearing) / 2 * DEG2RAD
+      : 1 * DEG2RAD;
+
+    radialData.forEach(ray => {
+      // bearing 0 = North = up = -π/2 in canvas coords
+      const angleCentre = (ray.bearing - 90) * DEG2RAD;
+      const a1 = angleCentre - halfAngle;
+      const a2 = angleCentre + halfAngle;
+
+      // length proportional to visible dist / radius, clamped
+      const frac = Math.min(ray.visibleDist / radius, 1);
+      const len  = R * frac;
+
+      rctx.beginPath();
+      rctx.moveTo(cx, cy);
+      rctx.arc(cx, cy, len, a1, a2);
+      rctx.closePath();
+
+      if (ray.visible) {
+        rctx.fillStyle = 'rgba(78,255,160,0.55)';
+      } else {
+        rctx.fillStyle = 'rgba(255,92,92,0.50)';
+      }
+      rctx.fill();
+      rctx.strokeStyle = ray.visible ? 'rgba(78,255,160,0.2)' : 'rgba(255,92,92,0.2)';
+      rctx.lineWidth = 0.5;
+      rctx.stroke();
+    });
+  }
+
+  /* observer dot */
+  rctx.beginPath();
+  rctx.arc(cx, cy, 5, 0, Math.PI*2);
+  rctx.fillStyle = '#ffb340';
+  rctx.fill();
+  rctx.strokeStyle = '#0a0c0f';
+  rctx.lineWidth = 2;
+  rctx.stroke();
+
+  radCanvas._drawParams = { cx, cy, R, radius };
+}
+
+/* ─── RADIAL TOOLTIP ───────────────────────────────────── */
+radCanvas.addEventListener('mousemove', e => {
+  if (!radCanvas._drawParams || !radialData.length) return;
+  const rect = radCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const { cx, cy, R, radius } = radCanvas._drawParams;
+
+  const dx = mx - cx, dy = my - cy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist > R || dist < 2) { radTooltip.classList.remove('visible'); return; }
+
+  // bearing from centre: atan2, where 0=North (up = -y)
+  let bearing = Math.atan2(dx, -dy) * RAD2DEG;
+  if (bearing < 0) bearing += 360;
+
+  // find closest ray
+  let closest = null, bestDiff = 999;
+  radialData.forEach(r => {
+    let diff = Math.abs(r.bearing - bearing);
+    if (diff > 180) diff = 360 - diff;
+    if (diff < bestDiff) { bestDiff = diff; closest = r; }
+  });
+  if (!closest) { radTooltip.classList.remove('visible'); return; }
+
+  document.getElementById('rttBearing').textContent = closest.bearing.toFixed(1) + '°';
+  document.getElementById('rttDist').textContent    = (closest.visible ? ' · Clear' : ' · Blocked') + ' @ ' + closest.visibleDist.toFixed(2) + ' km';
+  radTooltip.style.left = (mx + 14) + 'px';
+  radTooltip.style.top  = (my - 20) + 'px';
+  radTooltip.classList.add('visible');
+});
+radCanvas.addEventListener('mouseleave', () => radTooltip.classList.remove('visible'));
+
+/* ─── RADIAL TABLE ─────────────────────────────────────── */
+function populateRadialTable() {
+  const tbody = document.getElementById('radialTableBody');
+  tbody.innerHTML = '';
+  radialData.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.bearing.toFixed(1)}°</td>
+      <td class="${r.visible ? 'vis' : 'blk'}">${r.visible ? 'Visible' : 'Blocked'}</td>
+      <td>${r.visibleDist.toFixed(2)} km</td>
+      <td>${r.blockElev !== null ? Math.round(r.blockElev)+' m' : '—'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPORTS
+   ═══════════════════════════════════════════════════════════ */
+document.getElementById('btnExportCSV').addEventListener('click', () => {
+  let csv = 'distance_km,elevation_m\n';
+  profileData.forEach(p => { csv += `${p.dist.toFixed(4)},${p.elev !== null ? p.elev.toFixed(2) : ''}\n`; });
+  downloadText('profile.csv', csv);
+});
+document.getElementById('btnExportPNG').addEventListener('click', () => {
+  const a = document.createElement('a'); a.download = 'profile.png'; a.href = canvas.toDataURL(); a.click();
+});
+document.getElementById('btnExportRadialPNG').addEventListener('click', () => {
+  const a = document.createElement('a'); a.download = 'radial_los.png'; a.href = radCanvas.toDataURL(); a.click();
+});
+document.getElementById('btnExportRadialCSV').addEventListener('click', () => {
+  let csv = 'bearing_deg,visible,visible_dist_km,block_elev_m,block_dist_km\n';
+  radialData.forEach(r => {
+    csv += `${r.bearing.toFixed(1)},${r.visible},${r.visibleDist.toFixed(3)},${r.blockElev !== null ? r.blockElev.toFixed(1) : ''},${r.blockDist !== null ? r.blockDist.toFixed(3) : ''}\n`;
+  });
+  downloadText('radial_los.csv', csv);
+});
+
+function downloadText(name, text) {
+  const blob = new Blob([text], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CLEAR
+   ═══════════════════════════════════════════════════════════ */
+btnClear.addEventListener('click', () => {
+  Object.keys(tiles).forEach(k => delete tiles[k]);
+  renderTileTags();
+  profileData = []; radialData = [];
+  profilePanel.classList.remove('visible');
+  radialPanel.classList.remove('visible');
+  ['startLat','startLng','endLat','endLng','radLat','radLng','radRadius'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  setStatus('', false);
+  updateBtn();
+});
+
+/* ═══════════════════════════════════════════════════════════
+   UTILS
+   ═══════════════════════════════════════════════════════════ */
+function setStatus(msg, isErr) {
+  statusMsg.textContent = msg;
+  statusMsg.className = 'status-msg' + (isErr ? ' err' : (msg ? ' ok' : ''));
+}
+function updateBtn() { btnGen.disabled = Object.keys(tiles).length === 0; }
+function niceStep(raw) {
+  const mag  = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  if (norm < 1.5) return mag;
+  if (norm < 3.5) return 2*mag;
+  if (norm < 7.5) return 5*mag;
+  return 10*mag;
+}
+
+window.addEventListener('resize', () => {
+  if (currentMode === 'ab' && profileData.length) drawProfile(cachedLOS);
+});
+</script>
+</body>
+</html>
