@@ -3,7 +3,11 @@
 -42.010696, 146.721765
 
 update observer location when manually input changed.
+terrain profile needs to maintain aspect ratio when window size is changed. currently it streaches.
 
+min max tower height needs to account for trees.
+
+change "use towers" to "manual towers"
 
 Future
 allow drag and drop of observer and remore end in path profile to update gps location.
