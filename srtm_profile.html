@@ -253,6 +253,111 @@
 
   .export-row { margin-top: 14px; display: flex; gap: 10px; }
 
+  /* ─── Terrain map ─── */
+  #terrainMapCanvas, #radialTerrainMapCanvas { width: 100%; height: 400px; cursor: grab; }
+  #terrainMapCanvas.panning, #radialTerrainMapCanvas.panning { cursor: grabbing; }
+  .map-info { font-size: 0.7rem; color: var(--text-dim); margin-top: 10px; }
+  .map-hover-info {
+    position: absolute;
+    background: rgba(17,20,24,0.95);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.7rem;
+    color: var(--text);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 10;
+    min-width: 140px;
+  }
+  .map-hover-info.visible { opacity: 1; }
+  .map-hover-info.frozen { border-color: var(--accent); }
+  .map-hover-info div { margin: 2px 0; }
+  .map-hover-info .info-label { color: var(--text-dim); display: inline-block; width: 50px; }
+  .map-hover-info .info-value { color: var(--accent); font-weight: 500; }
+  .map-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .map-controls button {
+    font-size: 0.7rem;
+    padding: 5px 10px;
+  }
+  .minimap {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 120px;
+    height: 80px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: rgba(10,12,15,0.9);
+    cursor: pointer;
+    z-index: 5;
+  }
+  .zoom-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(17,20,24,0.9);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    color: var(--accent);
+    font-weight: 500;
+    z-index: 5;
+  }
+
+  /* ─── Profile options ─── */
+  .profile-options { 
+    display: flex; 
+    gap: 14px; 
+    flex-wrap: wrap; 
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--bg-input);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .option-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .option-group label {
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+  }
+  .option-group input[type="number"] {
+    width: 80px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.76rem;
+    padding: 5px 8px;
+  }
+  .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .checkbox-group input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+  .checkbox-group label {
+    font-size: 0.72rem;
+    color: var(--text);
+    cursor: pointer;
+  }
+
   /* ─── Radial layout ─── */
   .radial-output-layout {
     display: grid;
@@ -337,6 +442,27 @@
     <div class="tile-list" id="tileList"></div>
   </div>
 
+  <!-- 1b. Terrain Map -->
+  <div class="panel output-panel" id="terrainMapPanel">
+    <div class="panel-label">Terrain Map</div>
+    <div class="canvas-wrap">
+      <canvas id="terrainMapCanvas"></canvas>
+      <canvas class="minimap" id="minimapCanvas"></canvas>
+      <div class="zoom-indicator" id="zoomIndicator">1.0x</div>
+      <div class="map-hover-info" id="mapHoverInfo">
+        <div><span class="info-label">Lat:</span><span class="info-value" id="hoverLat">—</span></div>
+        <div><span class="info-label">Lng:</span><span class="info-value" id="hoverLng">—</span></div>
+        <div><span class="info-label">Elev:</span><span class="info-value" id="hoverElev">—</span></div>
+      </div>
+    </div>
+    <div class="map-controls">
+      <button class="btn btn-secondary" id="btnResetZoom">Reset Zoom</button>
+      <button class="btn btn-secondary" id="btnSaveTiles">Save Tiles</button>
+      <button class="btn btn-secondary" id="btnLoadTiles">Load Saved Tiles</button>
+    </div>
+    <div class="map-info" id="mapInfo"></div>
+  </div>
+
   <!-- 2. Mode + inputs -->
   <div class="panel">
     <div class="panel-label">2 — Configure</div>
@@ -393,9 +519,23 @@
             <option value="1000">1 000</option>
           </select>
         </div>
-        <div class="input-wrap" style="width:140px;">
-          <label>Observer height (m)</label>
+        <div class="input-wrap" style="width:160px;">
+          <label>Local observer height (m)</label>
           <input type="text" id="radObsHeight" value="0" />
+        </div>
+        <div class="input-wrap" style="width:180px;">
+          <label>Max remote tower height (m)</label>
+          <input type="number" id="radMaxTowerHeight" value="50" min="0" step="5" />
+        </div>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:16px; flex-wrap:wrap;">
+        <div class="checkbox-group">
+          <input type="checkbox" id="showRadialHeatmap" />
+          <label for="showRadialHeatmap">Show tower height heatmap</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="showRadialTerrain" />
+          <label for="showRadialTerrain">Overlay terrain on polar plot</label>
         </div>
       </div>
     </div>
@@ -433,6 +573,37 @@
         <div class="stat"><span class="stat-label">LOS</span><span class="stat-value" id="statLOS">—</span></div>
       </div>
     </div>
+    <div class="profile-options">
+      <div class="option-group">
+        <label>Start tower (m)</label>
+        <input type="number" id="startTowerHeight" value="10" min="0" step="1" />
+      </div>
+      <div class="option-group">
+        <label>End tower (m)</label>
+        <input type="number" id="endTowerHeight" value="10" min="0" step="1" />
+      </div>
+      <div class="option-group">
+        <label>Tree height (m)</label>
+        <input type="number" id="treeHeight" value="5" min="0" step="0.5" />
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showLOS" checked />
+        <label for="showLOS">Line of sight</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showUserTowers" checked />
+        <label for="showUserTowers">User towers</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showMinTowers" />
+        <label for="showMinTowers">Min tower heights</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showOptimalTowers" />
+        <label for="showOptimalTowers">Optimal combined towers</label>
+      </div>
+      <button class="btn btn-secondary" id="btnUpdateProfile" style="margin-left:auto;">Update</button>
+    </div>
     <div class="canvas-wrap">
       <canvas id="profileCanvas" height="320"></canvas>
       <div class="tooltip" id="tooltip">
@@ -458,8 +629,16 @@
         <div class="stat"><span class="stat-label">Obs. Elev</span><span class="stat-value" id="rStatObsElev">—</span></div>
       </div>
     </div>
+    <div class="canvas-wrap" style="margin-bottom: 20px;">
+      <canvas id="radialTerrainMapCanvas" width="600" height="400"></canvas>
+      <div class="map-hover-info" id="radMapHoverInfo">
+        <div><span class="info-label">Lat:</span><span class="info-value" id="radHoverLat">—</span></div>
+        <div><span class="info-label">Lng:</span><span class="info-value" id="radHoverLng">—</span></div>
+        <div><span class="info-label">Elev:</span><span class="info-value" id="radHoverElev">—</span></div>
+      </div>
+    </div>
     <div class="radial-output-layout">
-      <div class="radial-polar-wrap">
+      <div class="radial-polar-wrap" style="display:none;">
         <div class="canvas-wrap">
           <canvas id="radialCanvas" width="400" height="400"></canvas>
           <div class="tooltip" id="radTooltip">
@@ -473,7 +652,7 @@
           <span><span class="leg-swatch" style="background:#ffb340;"></span>Observer</span>
         </div>
       </div>
-      <div class="radial-table-wrap">
+      <div class="radial-table-wrap" style="display:none;">
         <table class="radial-table" id="radialTable">
           <thead><tr><th>Bearing</th><th>Status</th><th>Visible dist</th><th>Block elev</th></tr></thead>
           <tbody id="radialTableBody"></tbody>
@@ -489,6 +668,9 @@
 </div>
 
 <script>
+// Wrap everything in DOMContentLoaded to ensure DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+
 /* ═══════════════════════════════════════════════════════════
    STATE
    ═══════════════════════════════════════════════════════════ */
@@ -497,6 +679,155 @@ let profileData  = [];    // A→B: [{dist, elev}]
 let radialData   = [];    // radial: [{bearing, visible, visibleDist, blockElev, blockDist}]
 let currentMode  = 'ab';  // 'ab' | 'radial'
 let cachedLOS    = null;  // last LOS result for resize redraws
+let filesLoading = 0;     // track number of files being loaded
+
+/* ═══════════════════════════════════════════════════════════
+   INDEXEDDB HELPERS (for large HGT files)
+   ═══════════════════════════════════════════════════════════ */
+let db = null;
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('SRTMDatabase', 1);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      db = request.result;
+      resolve(db);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('tiles')) {
+        db.createObjectStore('tiles', { keyPath: 'key' });
+      }
+    };
+  });
+}
+
+function saveTilesToStorage() {
+  if (!db) {
+    console.error('Database not initialized');
+    return;
+  }
+  
+  try {
+    console.log('Saving tiles:', Object.keys(tiles));
+    const transaction = db.transaction(['tiles'], 'readwrite');
+    const store = transaction.objectStore('tiles');
+    
+    // Clear existing tiles first
+    store.clear();
+    
+    // Save each tile
+    Object.keys(tiles).forEach(key => {
+      store.put({
+        key: key,
+        data: Array.from(tiles[key].data),
+        size: tiles[key].size
+      });
+    });
+    
+    transaction.oncomplete = () => {
+      setStatus(`Saved ${Object.keys(tiles).length} tiles to browser storage`, false);
+      console.log('All tiles saved successfully');
+    };
+    
+    transaction.onerror = () => {
+      setStatus('Error saving tiles: ' + transaction.error, true);
+      console.error('Save error:', transaction.error);
+    };
+  } catch (e) {
+    console.error('Save error:', e);
+    setStatus('Error saving tiles: ' + e.message, true);
+  }
+}
+
+function loadTilesFromStorage() {
+  if (!db) {
+    console.error('Database not initialized');
+    return;
+  }
+  
+  try {
+    const transaction = db.transaction(['tiles'], 'readonly');
+    const store = transaction.objectStore('tiles');
+    const request = store.getAll();
+    
+    request.onsuccess = () => {
+      const savedTiles = request.result;
+      if (savedTiles.length === 0) {
+        setStatus('No saved tiles found', false);
+        return;
+      }
+      
+      Object.keys(tiles).forEach(k => delete tiles[k]);
+      savedTiles.forEach(tile => {
+        tiles[tile.key] = {
+          data: new Int16Array(tile.data),
+          size: tile.size
+        };
+      });
+      
+      renderTileTags();
+      updateBtn();
+      
+      // Reset zoom to fit all loaded tiles
+      mapZoom = 1;
+      mapOffsetX = 0;
+      mapOffsetY = 0;
+      
+      // Ensure terrain map panel is visible first, then draw after layout settles
+      terrainMapPanel.classList.add('visible');
+      setTimeout(() => {
+        drawTerrainMap();
+      }, 50);
+      
+      setStatus(`Loaded ${Object.keys(tiles).length} tiles from browser storage`, false);
+      console.log('Loaded tiles:', Object.keys(tiles));
+    };
+    
+    request.onerror = () => {
+      setStatus('Error loading tiles: ' + request.error, true);
+      console.error('Load error:', request.error);
+    };
+  } catch (e) {
+    console.error('Load error:', e);
+    setStatus('Error loading tiles: ' + e.message, true);
+  }
+}
+
+function saveInputsToStorage() {
+  const inputs = {
+    startLat: document.getElementById('startLat').value,
+    startLng: document.getElementById('startLng').value,
+    endLat: document.getElementById('endLat').value,
+    endLng: document.getElementById('endLng').value,
+    radLat: document.getElementById('radLat').value,
+    radLng: document.getElementById('radLng').value,
+    radRadius: document.getElementById('radRadius').value,
+    startTowerHeight: document.getElementById('startTowerHeight')?.value || '10',
+    endTowerHeight: document.getElementById('endTowerHeight')?.value || '10',
+    treeHeight: document.getElementById('treeHeight')?.value || '5',
+    radObsHeight: document.getElementById('radObsHeight').value,
+    radMaxTowerHeight: document.getElementById('radMaxTowerHeight')?.value || '50'
+  };
+  localStorage.setItem('srtm_inputs', JSON.stringify(inputs));
+}
+
+function loadInputsFromStorage() {
+  try {
+    const stored = localStorage.getItem('srtm_inputs');
+    if (!stored) return;
+    const inputs = JSON.parse(stored);
+    Object.keys(inputs).forEach(key => {
+      const el = document.getElementById(key);
+      if (el && inputs[key]) el.value = inputs[key];
+    });
+  } catch (e) {
+    console.error('Error loading inputs:', e);
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════
    DOM REFS
@@ -507,6 +838,27 @@ const tileList     = document.getElementById('tileList');
 const btnGen       = document.getElementById('btnGenerate');
 const btnClear     = document.getElementById('btnClear');
 const statusMsg    = document.getElementById('statusMsg');
+
+const terrainMapPanel = document.getElementById('terrainMapPanel');
+const mapCanvas    = document.getElementById('terrainMapCanvas');
+const mctx         = mapCanvas.getContext('2d');
+const mapHoverInfo = document.getElementById('mapHoverInfo');
+const minimapCanvas = document.getElementById('minimapCanvas');
+const mmctx        = minimapCanvas.getContext('2d');
+const radMapCanvas = document.getElementById('radialTerrainMapCanvas');
+const radMctx      = radMapCanvas ? radMapCanvas.getContext('2d') : null;
+const radMapHoverInfo = document.getElementById('radMapHoverInfo');
+
+// Terrain map state
+let mapZoom = 1;
+let mapOffsetX = 0;
+let mapOffsetY = 0;
+let mapIsPanning = false;
+let mapLastX = 0;
+let mapLastY = 0;
+let mapHoverFrozen = false;
+let radMapHoverFrozen = false;
+let lastRadialParams = null; // Store last radial generation params
 
 const profilePanel = document.getElementById('profilePanel');
 const canvas       = document.getElementById('profileCanvas');
@@ -519,6 +871,18 @@ const rctx         = radCanvas.getContext('2d');
 const radTooltip   = document.getElementById('radTooltip');
 
 const abSamplesWrap= document.getElementById('abSamplesWrap');
+
+/* ═══════════════════════════════════════════════════════════
+   INITIALIZATION
+   ═══════════════════════════════════════════════════════════ */
+// Load inputs first
+loadInputsFromStorage();
+
+// Auto-save inputs on change
+['startLat','startLng','endLat','endLng','radLat','radLng','radRadius','startTowerHeight','endTowerHeight','treeHeight','radObsHeight','radMaxTowerHeight'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', saveInputsToStorage);
+});
 
 /* ═══════════════════════════════════════════════════════════
    MODE TOGGLE
@@ -546,8 +910,12 @@ dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.
 fileInput.addEventListener('change', e => loadFiles(e.target.files));
 
 function loadFiles(files) {
-  [...files].forEach(file => {
-    if (!file.name.toLowerCase().endsWith('.hgt')) return;
+  const fileArray = [...files].filter(f => f.name.toLowerCase().endsWith('.hgt'));
+  if (fileArray.length === 0) return;
+  
+  filesLoading = fileArray.length; // Track how many files we're loading
+  
+  fileArray.forEach(file => {
     const reader = new FileReader();
     reader.onload = ev => {
       const buf   = ev.target.result;
@@ -555,18 +923,40 @@ function loadFiles(files) {
       let size;
       if      (count === 1201 * 1201) size = 1201;
       else if (count === 3601 * 3601) size = 3601;
-      else { setStatus(`${file.name}: unrecognised size (${count} samples)`, true); return; }
+      else { 
+        setStatus(`${file.name}: unrecognised size (${count} samples)`, true); 
+        filesLoading--;
+        if (filesLoading === 0) saveTilesToStorage();
+        return; 
+      }
 
       const view = new DataView(buf);
       const arr  = new Int16Array(count);
       for (let i = 0; i < count; i++) arr[i] = view.getInt16(i * 2, false);
 
       const key = parseTileKey(file.name);
-      if (!key) { setStatus(`${file.name}: bad filename`, true); return; }
+      if (!key) { 
+        setStatus(`${file.name}: bad filename`, true); 
+        filesLoading--;
+        if (filesLoading === 0) saveTilesToStorage();
+        return; 
+      }
+      
       tiles[key] = { data: arr, size };
+      console.log('Tile added:', key, 'Total tiles:', Object.keys(tiles).length); // Debug
       renderTileTags();
       updateBtn();
+      drawTerrainMap();
       setStatus(`Loaded ${file.name} (${size === 1201 ? '3″' : '1″'} · ${key})`, false);
+      
+      // Decrement counter and save when all files are loaded
+      filesLoading--;
+      console.log('Files remaining:', filesLoading); // Debug
+      if (filesLoading === 0) {
+        console.log('All files loaded, saving...'); // Debug
+        saveTilesToStorage();
+        setStatus(`All tiles loaded and saved (${Object.keys(tiles).length} total)`, false);
+      }
     };
     reader.readAsArrayBuffer(file);
   });
@@ -586,6 +976,408 @@ function tileKeyFromCoord(latBase, lngBase) {
   const ew = lngBase >= 0 ? 'E' : 'W';
   return `${ns}${String(Math.abs(latBase)).padStart(2,'0')}${ew}${String(Math.abs(lngBase)).padStart(3,'0')}`;
 }
+
+function drawTerrainMap(canvas = mapCanvas, ctx = mctx, centerLat = null, centerLng = null, radiusKm = null) {
+  const tileKeys = Object.keys(tiles);
+  if (tileKeys.length === 0) {
+    terrainMapPanel.classList.remove('visible');
+    return;
+  }
+
+  // Calculate bounds of all loaded tiles
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  
+  if (centerLat !== null && centerLng !== null && radiusKm !== null) {
+    // For radial view: show area around center point
+    const latPerKm = 1 / 111.32; // approximate
+    const lngPerKm = 1 / (111.32 * Math.cos(centerLat * DEG2RAD));
+    const margin = 1.2; // 20% margin
+    minLat = centerLat - radiusKm * latPerKm * margin;
+    maxLat = centerLat + radiusKm * latPerKm * margin;
+    minLng = centerLng - radiusKm * lngPerKm * margin;
+    maxLng = centerLng + radiusKm * lngPerKm * margin;
+  } else {
+    // For main map: show all tiles
+    tileKeys.forEach(key => {
+      const m = key.match(/^([NS])(\d+)([EW])(\d+)$/);
+      if (!m) return;
+      const lat = parseInt(m[2]) * (m[1] === 'N' ? 1 : -1);
+      const lng = parseInt(m[4]) * (m[3] === 'E' ? 1 : -1);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat + 1);
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng + 1);
+    });
+  }
+
+  const latRange = maxLat - minLat;
+  const lngRange = maxLng - minLng;
+  
+  const dpr = window.devicePixelRatio || 1;
+  // Make canvas fill its container while maintaining aspect ratio
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const containerW = Math.max(Math.floor(rect.width), 600);
+  const containerH = 400;
+  
+  // Calculate dimensions based on lat/lng ratio to fill container
+  const dataAspectRatio = lngRange / latRange;
+  const containerAspectRatio = containerW / containerH;
+  
+  let W, H;
+  if (dataAspectRatio > containerAspectRatio) {
+    // Data is wider - fit to width
+    W = containerW;
+    H = Math.floor(W / dataAspectRatio);
+    // But ensure we fill height if result is too small
+    if (H < containerH * 0.8) {
+      H = containerH;
+      W = Math.floor(H * dataAspectRatio);
+    }
+  } else {
+    // Data is taller - fit to height
+    H = containerH;
+    W = Math.floor(H * dataAspectRatio);
+    // But ensure we fill width if result is too small
+    if (W < containerW * 0.8) {
+      W = containerW;
+      H = Math.floor(W / dataAspectRatio);
+    }
+  }
+  
+  // Safety check
+  if (W <= 0 || H <= 0) {
+    console.warn('Canvas dimensions invalid, skipping draw');
+    return;
+  }
+  
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(dpr, dpr);
+
+  ctx.fillStyle = '#0a0c0f';
+  ctx.fillRect(0, 0, W, H);
+
+  // Apply zoom and pan transform
+  ctx.save();
+  const zoom = canvas === mapCanvas ? mapZoom : 1;
+  const offsetX = canvas === mapCanvas ? mapOffsetX : 0;
+  const offsetY = canvas === mapCanvas ? mapOffsetY : 0;
+  ctx.translate(W/2, H/2);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-W/2 + offsetX, -H/2 + offsetY);
+
+  // Sample the terrain and find min/max elevation for color mapping
+  // Keep consistent resolution by sampling the visible area only
+  // Calculate how much of the original area we're viewing after zoom
+  const viewLatRange = latRange / zoom;
+  const viewLngRange = lngRange / zoom;
+  
+  // Base density gives good quality, we keep it constant for consistent appearance
+  const baseDensity = 250;
+  // Sample based on the view area, not the full area
+  const sampleDensity = baseDensity;
+  
+  const samples = [];
+  let minElev = Infinity, maxElev = -Infinity;
+  
+  // Calculate the actual visible area after zoom and pan
+  const viewCenterLat = minLat + latRange / 2;
+  const viewCenterLng = minLng + lngRange / 2;
+  const viewMinLat = viewCenterLat - viewLatRange / 2 - (mapOffsetY / H) * viewLatRange;
+  const viewMaxLat = viewCenterLat + viewLatRange / 2 - (mapOffsetY / H) * viewLatRange;
+  const viewMinLng = viewCenterLng - viewLngRange / 2 + (mapOffsetX / W) * viewLngRange;
+  const viewMaxLng = viewCenterLng + viewLngRange / 2 + (mapOffsetX / W) * viewLngRange;
+  
+  for (let y = 0; y < sampleDensity; y++) {
+    for (let x = 0; x < sampleDensity; x++) {
+      // Sample the actual visible area
+      const lat = viewMinLat + (viewLatRange * (sampleDensity - y) / sampleDensity);
+      const lng = viewMinLng + (viewLngRange * x / sampleDensity);
+      const elev = getElevation(lat, lng);
+      if (elev !== null) {
+        minElev = Math.min(minElev, elev);
+        maxElev = Math.max(maxElev, elev);
+        // Store canvas coordinates
+        const canvasX = ((lng - minLng) / lngRange) * W;
+        const canvasY = ((maxLat - lat) / latRange) * H;
+        samples.push({ x: canvasX, y: canvasY, elev });
+      }
+    }
+  }
+
+  const elevRange = maxElev - minElev || 1;
+
+  // Draw elevation as colored pixels
+  const pixelSize = Math.max(Math.ceil(W / sampleDensity) * zoom, 1) + 1;
+  samples.forEach(s => {
+    const norm = (s.elev - minElev) / elevRange;
+    const color = getElevationColor(norm);
+    ctx.fillStyle = color;
+    ctx.fillRect(s.x, s.y, pixelSize, pixelSize);
+  });
+
+  // Draw grid for tile boundaries
+  ctx.strokeStyle = 'rgba(78,159,255,0.3)';
+  ctx.lineWidth = 1;
+  for (let lat = Math.ceil(minLat); lat <= maxLat; lat++) {
+    const py = H * (1 - (lat - minLat) / latRange);
+    ctx.beginPath();
+    ctx.moveTo(0, py);
+    ctx.lineTo(W, py);
+    ctx.stroke();
+  }
+  for (let lng = Math.ceil(minLng); lng <= maxLng; lng++) {
+    const px = W * (lng - minLng) / lngRange;
+    ctx.beginPath();
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, H);
+    ctx.stroke();
+  }
+
+  // Draw center marker and radial sight lines for radial view
+  if (centerLat !== null && centerLng !== null) {
+    const cx = W * (centerLng - minLng) / lngRange;
+    const cy = H * (1 - (centerLat - minLat) / latRange);
+    
+    // Draw radial sight lines if data exists
+    if (radialData && radialData.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(78,255,160,0.4)';
+      ctx.lineWidth = 1;
+      
+      radialData.forEach(ray => {
+        if (!ray.visible) {
+          ctx.strokeStyle = 'rgba(255,92,92,0.4)';
+        } else {
+          ctx.strokeStyle = 'rgba(78,255,160,0.4)';
+        }
+        
+        const endPoint = destPoint(centerLat, centerLng, ray.bearing, ray.visibleDist);
+        const ex = W * (endPoint.lng - minLng) / lngRange;
+        const ey = H * (1 - (endPoint.lat - minLat) / latRange);
+        
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        
+        // Draw endpoint marker
+        ctx.beginPath();
+        ctx.arc(ex, ey, 2, 0, Math.PI*2);
+        ctx.fillStyle = ray.visible ? 'rgba(78,255,160,0.8)' : 'rgba(255,92,92,0.8)';
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+    
+    // Draw center marker on top
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, Math.PI*2);
+    ctx.fillStyle = '#ffb340';
+    ctx.fill();
+    ctx.strokeStyle = '#0a0c0f';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // Store map parameters for coordinate lookup
+  canvas._mapParams = { minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY };
+
+  if (canvas === mapCanvas) {
+    document.getElementById('mapInfo').textContent = 
+      `Tiles: ${tileKeys.length} | Lat: ${minLat.toFixed(2)}° to ${maxLat.toFixed(2)}° | Lng: ${minLng.toFixed(2)}° to ${maxLng.toFixed(2)}° | Elev: ${Math.round(minElev)}m to ${Math.round(maxElev)}m | Samples: ${sampleDensity}x${sampleDensity}`;
+    document.getElementById('zoomIndicator').textContent = mapZoom.toFixed(1) + 'x';
+    terrainMapPanel.classList.add('visible');
+    drawMinimap(minLat, maxLat, minLng, maxLng, latRange, lngRange);
+  }
+}
+
+function drawMinimap(minLat, maxLat, minLng, maxLng, latRange, lngRange) {
+  const W = 120, H = 80;
+  minimapCanvas.width = W;
+  minimapCanvas.height = H;
+  
+  mmctx.fillStyle = '#0a0c0f';
+  mmctx.fillRect(0, 0, W, H);
+  
+  // Draw simplified terrain
+  const density = 40;
+  for (let y = 0; y < density; y++) {
+    for (let x = 0; x < density; x++) {
+      const lat = minLat + (latRange * (density - y) / density);
+      const lng = minLng + (lngRange * x / density);
+      const elev = getElevation(lat, lng);
+      if (elev !== null) {
+        const norm = Math.max(0, Math.min(1, elev / 3000)); // Simple normalization
+        const color = getElevationColor(norm);
+        mmctx.fillStyle = color;
+        mmctx.fillRect(x * W / density, y * H / density, Math.ceil(W / density) + 1, Math.ceil(H / density) + 1);
+      }
+    }
+  }
+  
+  // Draw viewport rectangle
+  const viewW = W / mapZoom;
+  const viewH = H / mapZoom;
+  const viewX = W/2 - viewW/2 - mapOffsetX * W / (latRange * 111.32 * mapZoom);
+  const viewY = H/2 - viewH/2 - mapOffsetY * H / (lngRange * 111.32 * mapZoom);
+  
+  mmctx.strokeStyle = '#4e9fff';
+  mmctx.lineWidth = 1.5;
+  mmctx.strokeRect(viewX, viewY, viewW, viewH);
+}
+
+function getElevationColor(norm) {
+  // Color gradient from low (blue) to high (red/white)
+  if (norm < 0.2) {
+    const t = norm / 0.2;
+    return `rgb(${Math.round(20 + t*30)}, ${Math.round(40 + t*80)}, ${Math.round(80 + t*100)})`;
+  } else if (norm < 0.4) {
+    const t = (norm - 0.2) / 0.2;
+    return `rgb(${Math.round(50 + t*40)}, ${Math.round(120 + t*60)}, ${Math.round(180 - t*80)})`;
+  } else if (norm < 0.6) {
+    const t = (norm - 0.4) / 0.2;
+    return `rgb(${Math.round(90 + t*70)}, ${Math.round(180 - t*60)}, ${Math.round(100 - t*60)})`;
+  } else if (norm < 0.8) {
+    const t = (norm - 0.6) / 0.2;
+    return `rgb(${Math.round(160 + t*50)}, ${Math.round(120 + t*40)}, ${Math.round(40 + t*20)})`;
+  } else {
+    const t = (norm - 0.8) / 0.2;
+    return `rgb(${Math.round(210 + t*45)}, ${Math.round(160 + t*95)}, ${Math.round(60 + t*195)})`;
+  }
+}
+
+// Terrain map interaction handlers
+function setupMapInteractions(canvas, hoverInfo, isRadial = false) {
+  const hoverLatEl = hoverInfo.querySelector(isRadial ? '#radHoverLat' : '#hoverLat');
+  const hoverLngEl = hoverInfo.querySelector(isRadial ? '#radHoverLng' : '#hoverLng');
+  const hoverElevEl = hoverInfo.querySelector(isRadial ? '#radHoverElev' : '#hoverElev');
+  let frozen = false;
+
+  canvas.addEventListener('mousemove', e => {
+    if (frozen) return;
+    if (!canvas._mapParams) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    
+    const { minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY } = canvas._mapParams;
+    
+    // Inverse transform to get map coordinates
+    const tx = (mx - W/2) / zoom - offsetX + W/2;
+    const ty = (my - H/2) / zoom - offsetY + H/2;
+    
+    if (tx < 0 || tx > W || ty < 0 || ty > H) {
+      hoverInfo.classList.remove('visible');
+      return;
+    }
+    
+    const lng = minLng + (tx / W) * lngRange;
+    const lat = minLat + (1 - ty / H) * latRange;
+    const elev = getElevation(lat, lng);
+    
+    if (elev !== null) {
+      hoverLatEl.textContent = lat.toFixed(5) + '°';
+      hoverLngEl.textContent = lng.toFixed(5) + '°';
+      hoverElevEl.textContent = Math.round(elev) + ' m';
+      hoverInfo.style.left = (mx + 14) + 'px';
+      hoverInfo.style.top = (my - 60) + 'px';
+      hoverInfo.classList.add('visible');
+    } else {
+      hoverInfo.classList.remove('visible');
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    if (!frozen) hoverInfo.classList.remove('visible');
+  });
+
+  canvas.addEventListener('click', () => {
+    frozen = !frozen;
+    if (frozen) {
+      hoverInfo.classList.add('frozen');
+    } else {
+      hoverInfo.classList.remove('frozen');
+      hoverInfo.classList.remove('visible');
+    }
+  });
+
+  // Pan functionality (only for main map)
+  if (!isRadial) {
+    canvas.addEventListener('mousedown', e => {
+      mapIsPanning = true;
+      mapLastX = e.clientX;
+      mapLastY = e.clientY;
+      canvas.classList.add('panning');
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      if (!mapIsPanning) return;
+      const dx = e.clientX - mapLastX;
+      const dy = e.clientY - mapLastY;
+      mapOffsetX += dx / mapZoom;
+      mapOffsetY += dy / mapZoom;
+      mapLastX = e.clientX;
+      mapLastY = e.clientY;
+      drawTerrainMap();
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      mapIsPanning = false;
+      canvas.classList.remove('panning');
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      mapIsPanning = false;
+      canvas.classList.remove('panning');
+    });
+
+    // Zoom with mouse wheel
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      mapZoom *= zoomFactor;
+      mapZoom = Math.max(0.5, Math.min(10, mapZoom));
+      drawTerrainMap();
+    });
+  }
+}
+
+setupMapInteractions(mapCanvas, mapHoverInfo, false);
+if (radMapCanvas) setupMapInteractions(radMapCanvas, radMapHoverInfo, true);
+
+// Minimap click to navigate
+minimapCanvas.addEventListener('click', e => {
+  const rect = minimapCanvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = (e.clientY - rect.top) / rect.height;
+  
+  if (!mapCanvas._mapParams) return;
+  const { W, H, latRange, lngRange } = mapCanvas._mapParams;
+  
+  // Calculate new offset to center on clicked point
+  const targetX = (x - 0.5) * W;
+  const targetY = (y - 0.5) * H;
+  mapOffsetX = -targetX;
+  mapOffsetY = -targetY;
+  drawTerrainMap();
+});
+
+// Map control buttons
+document.getElementById('btnResetZoom')?.addEventListener('click', () => {
+  mapZoom = 1;
+  mapOffsetX = 0;
+  mapOffsetY = 0;
+  drawTerrainMap();
+});
+
+document.getElementById('btnSaveTiles')?.addEventListener('click', saveTilesToStorage);
+document.getElementById('btnLoadTiles')?.addEventListener('click', loadTilesFromStorage);
 
 function renderTileTags() {
   tileList.innerHTML = '';
@@ -760,11 +1552,139 @@ function checkLOS(obsLat, obsLng, obsElev, targetLat, targetLng, samples) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   TOWER HEIGHT CALCULATIONS
+   ═══════════════════════════════════════════════════════════ */
+function calculateMinTowerHeights(profileData, treeHeight = 5) {
+  // Calculate minimum tower height at each point to get LOS from that point to end
+  const n = profileData.length;
+  const minHeights = new Array(n).fill(0);
+  
+  if (n < 2) return minHeights;
+  
+  // For each point, calculate the height needed to see the end point
+  const endIdx = n - 1;
+  const endElev = profileData[endIdx].elev;
+  const endDist = profileData[endIdx].dist;
+  
+  for (let i = 0; i < n; i++) {
+    if (profileData[i].elev === null) continue;
+    
+    let requiredHeight = 0;
+    const iElev = profileData[i].elev + treeHeight;
+    const iDist = profileData[i].dist;
+    
+    // Check all points between i and end
+    for (let j = i + 1; j < n; j++) {
+      if (profileData[j].elev === null) continue;
+      
+      const jElev = profileData[j].elev + (j === endIdx ? 0 : treeHeight);
+      const jDist = profileData[j].dist;
+      
+      // Line from i to end
+      const lineSlope = (endElev - iElev) / (endDist - iDist);
+      const lineElevAtJ = iElev + lineSlope * (jDist - iDist);
+      
+      // If terrain at j is above the line, we need more height at i
+      if (jElev > lineElevAtJ) {
+        const deficit = jElev - lineElevAtJ;
+        requiredHeight = Math.max(requiredHeight, deficit);
+      }
+    }
+    
+    minHeights[i] = requiredHeight;
+  }
+  
+  return minHeights;
+}
+
+function calculateOptimalTowerHeights(profileData, treeHeight = 5) {
+  // Calculate optimal tower heights at start and end to minimize TOTAL height (start + end)
+  const n = profileData.length;
+  if (n < 2) return { startHeight: 0, endHeight: 0, totalHeight: 0 };
+  
+  const startElev = profileData[0].elev || 0;
+  const endElev = profileData[n - 1].elev || 0;
+  const totalDist = profileData[n - 1].dist;
+  
+  let minTotalHeight = Infinity;
+  let bestStart = 0, bestEnd = 0;
+  
+  // Binary search / optimization for minimum total height
+  // For each possible total height, find if there's a valid split
+  for (let totalH = 0; totalH <= 200; totalH += 0.5) {
+    // Try different splits of this total height
+    for (let startH = 0; startH <= totalH; startH += 0.5) {
+      const endH = totalH - startH;
+      
+      // Check if this combination gives LOS
+      const p1Elev = startElev + startH;
+      const p2Elev = endElev + endH;
+      let clearLOS = true;
+      
+      for (let i = 1; i < n - 1; i++) {
+        if (profileData[i].elev === null) continue;
+        
+        const dist = profileData[i].dist;
+        const terrainElev = profileData[i].elev + treeHeight;
+        
+        // Height of LOS line at this point
+        const t = dist / totalDist;
+        const losElev = p1Elev + (p2Elev - p1Elev) * t;
+        
+        if (terrainElev > losElev) {
+          clearLOS = false;
+          break;
+        }
+      }
+      
+      if (clearLOS) {
+        if (totalH < minTotalHeight) {
+          minTotalHeight = totalH;
+          bestStart = startH;
+          bestEnd = endH;
+        }
+        break; // Found a valid split for this total, no need to try more
+      }
+    }
+    
+    // Early exit if we found a solution
+    if (minTotalHeight < Infinity) {
+      break;
+    }
+  }
+  
+  return { startHeight: bestStart, endHeight: bestEnd, totalHeight: minTotalHeight };
+}
+
+/* ═══════════════════════════════════════════════════════════
    GENERATE  (dispatcher)
    ═══════════════════════════════════════════════════════════ */
 btnGen.addEventListener('click', () => {
   if (currentMode === 'ab') generateProfile();
   else                      generateRadial();
+});
+
+document.getElementById('btnUpdateProfile')?.addEventListener('click', () => {
+  if (profileData.length > 0) {
+    drawProfile(cachedLOS);
+  }
+});
+
+// Add change listeners to checkboxes to auto-update
+['showLOS', 'showUserTowers', 'showMinTowers', 'showOptimalTowers'].forEach(id => {
+  document.getElementById(id)?.addEventListener('change', () => {
+    if (profileData.length > 0) drawProfile(cachedLOS);
+  });
+});
+
+// Add input listeners for tower/tree heights to auto-update
+['startTowerHeight', 'endTowerHeight', 'treeHeight'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', () => {
+      if (profileData.length > 0) drawProfile(cachedLOS);
+    });
+  }
 });
 
 /* ═══════════════════════════════════════════════════════════
@@ -914,8 +1834,219 @@ function drawProfile(los) {
   ctx.lineJoin = 'round';
   ctx.stroke();
 
+  /* ─── TOWER HEIGHT LINES ─── */
+  const showLOS = document.getElementById('showLOS')?.checked ?? true;
+  const showUserTowers = document.getElementById('showUserTowers')?.checked;
+  const showMinTowers = document.getElementById('showMinTowers')?.checked;
+  const showOptimalTowers = document.getElementById('showOptimalTowers')?.checked;
+  const treeHeight = parseFloat(document.getElementById('treeHeight')?.value || 5);
+  
+  // Draw tree height offset as filled area
+  if (treeHeight > 0) {
+    ctx.save();
+    const treeGrad = ctx.createLinearGradient(0, pad.top, 0, H-pad.bottom);
+    treeGrad.addColorStop(0, 'rgba(34,139,34,0.2)');
+    treeGrad.addColorStop(1, 'rgba(34,139,34,0.05)');
+    
+    ctx.beginPath();
+    let started = false;
+    profileData.forEach(p => {
+      if (p.elev === null) { started = false; return; }
+      const x = toX(p.dist), y = toY(p.elev + treeHeight);
+      if (!started) { ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+    });
+    // Close the path along terrain
+    const reversed = [...profileData].reverse();
+    reversed.forEach(p => {
+      if (p.elev === null) return;
+      const x = toX(p.dist), y = toY(p.elev);
+      ctx.lineTo(x,y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = treeGrad;
+    ctx.fill();
+    
+    // Draw tree height line
+    ctx.strokeStyle = 'rgba(34,139,34,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 2]);
+    ctx.beginPath();
+    started = false;
+    profileData.forEach(p => {
+      if (p.elev === null) { started = false; return; }
+      const x = toX(p.dist), y = toY(p.elev + treeHeight);
+      if (!started) { ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Draw user-defined tower heights
+  if (showUserTowers && firstValid && lastValid) {
+    const startTowerH = parseFloat(document.getElementById('startTowerHeight')?.value || 10);
+    const endTowerH = parseFloat(document.getElementById('endTowerHeight')?.value || 10);
+    
+    const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev + startTowerH);
+    const x2 = toX(lastValid.dist),  y2 = toY(lastValid.elev + endTowerH);
+
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#ffb340';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.restore();
+    
+    // Draw tower verticals
+    ctx.save();
+    ctx.strokeStyle = '#ffb340';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(toX(firstValid.dist), toY(firstValid.elev));
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(toX(lastValid.dist), toY(lastValid.elev));
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Draw minimum tower heights: line from start tower to end point, and end tower to start point
+  if (showMinTowers && firstValid && lastValid) {
+    // Calculate height needed at start to see end
+    let startHeightNeeded = 0;
+    for (let i = 1; i < profileData.length - 1; i++) {
+      if (profileData[i].elev === null) continue;
+      const iDist = profileData[i].dist;
+      const iElev = profileData[i].elev + treeHeight;
+      const totalDist = lastValid.dist - firstValid.dist;
+      const lineElev = firstValid.elev + (lastValid.elev - firstValid.elev) * (iDist - firstValid.dist) / totalDist;
+      if (iElev > lineElev) {
+        startHeightNeeded = Math.max(startHeightNeeded, iElev - lineElev);
+      }
+    }
+
+    // Calculate height needed at end to see start
+    let endHeightNeeded = 0;
+    for (let i = 1; i < profileData.length - 1; i++) {
+      if (profileData[i].elev === null) continue;
+      const iDist = profileData[i].dist;
+      const iElev = profileData[i].elev + treeHeight;
+      const totalDist = lastValid.dist - firstValid.dist;
+      const lineElev = lastValid.elev + (firstValid.elev - lastValid.elev) * (lastValid.dist - iDist) / totalDist;
+      if (iElev > lineElev) {
+        endHeightNeeded = Math.max(endHeightNeeded, iElev - lineElev);
+      }
+    }
+
+    ctx.save();
+    
+    // Line from start tower to end
+    if (startHeightNeeded > 0) {
+      const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev + startHeightNeeded);
+      const x2 = toX(lastValid.dist), y2 = toY(lastValid.elev);
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = 'rgba(255,179,64,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      
+      // Tower vertical
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255,179,64,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(toX(firstValid.dist), toY(firstValid.elev));
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      
+      // Label
+      ctx.font = '10px "IBM Plex Mono", monospace';
+      ctx.fillStyle = 'rgba(255,179,64,1)';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${startHeightNeeded.toFixed(1)}m`, x1 + 5, y1);
+    }
+    
+    // Line from end tower to start
+    if (endHeightNeeded > 0) {
+      const x1 = toX(lastValid.dist), y1 = toY(lastValid.elev + endHeightNeeded);
+      const x2 = toX(firstValid.dist), y2 = toY(firstValid.elev);
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = 'rgba(255,140,100,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      
+      // Tower vertical
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255,140,100,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(toX(lastValid.dist), toY(lastValid.elev));
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      
+      // Label
+      ctx.font = '10px "IBM Plex Mono", monospace';
+      ctx.fillStyle = 'rgba(255,140,100,1)';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${endHeightNeeded.toFixed(1)}m`, x1 - 5, y1);
+    }
+    
+    ctx.restore();
+  }
+
+  // Draw optimal combined tower heights
+  if (showOptimalTowers && firstValid && lastValid) {
+    const optimal = calculateOptimalTowerHeights(profileData, treeHeight);
+    
+    if (optimal.totalHeight < Infinity) {
+      const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev + optimal.startHeight);
+      const x2 = toX(lastValid.dist),  y2 = toY(lastValid.elev + optimal.endHeight);
+
+      ctx.save();
+      ctx.setLineDash([8, 3]);
+      ctx.strokeStyle = '#4effa0';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.restore();
+      
+      // Draw tower verticals
+      ctx.save();
+      ctx.strokeStyle = '#4effa0';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(toX(firstValid.dist), toY(firstValid.elev));
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(toX(lastValid.dist), toY(lastValid.elev));
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.restore();
+      
+      // Add label
+      ctx.save();
+      ctx.font = '11px "IBM Plex Mono", monospace';
+      ctx.fillStyle = '#4effa0';
+      ctx.textAlign = 'center';
+      ctx.fillText(`Optimal: ${optimal.startHeight.toFixed(1)}m + ${optimal.endHeight.toFixed(1)}m`, (x1+x2)/2, Math.min(y1,y2) - 10);
+      ctx.restore();
+    }
+  }
+
   /* ─── LINE OF SIGHT between start and end ─── */
-  if (firstValid && lastValid) {
+  if (showLOS && firstValid && lastValid) {
     const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev);
     const x2 = toX(lastValid.dist),  y2 = toY(lastValid.elev);
 
@@ -1005,6 +2136,8 @@ function generateRadial() {
   const angRes  = parseFloat(document.getElementById('radAngRes').value);
   const samples = parseInt(document.getElementById('radSamples').value);
   const obsH    = parseFloat(document.getElementById('radObsHeight').value) || 0;
+  const remoteH = parseFloat(document.getElementById('radMaxTowerHeight').value) || 0;
+  const showHeatmap = document.getElementById('showRadialHeatmap')?.checked || false;
 
   if (isNaN(lat)||isNaN(lng)||isNaN(radius)) { setStatus('Lat, Lng and Radius are required.', true); return; }
   if (radius <= 0) { setStatus('Radius must be > 0.', true); return; }
@@ -1023,19 +2156,59 @@ function generateRadial() {
 
   // use setTimeout(0) to let the status paint, then compute
   setTimeout(() => {
-    for (let i = 0; i < numRays; i++) {
-      const bearing = (i * angRes) % 360;
-      const target  = destPoint(lat, lng, bearing, radius);
-      const result  = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples);
+    if (showHeatmap) {
+      // Heatmap mode: calculate minimum tower height needed for each bearing
+      const maxTowerH = parseFloat(document.getElementById('radMaxTowerHeight')?.value || 50);
+      
+      for (let i = 0; i < numRays; i++) {
+        const bearing = (i * angRes) % 360;
+        const target  = destPoint(lat, lng, bearing, radius);
+        const targetElev = getElevation(target.lat, target.lng) || 0;
+        
+        // Binary search for minimum tower height at remote end
+        let minH = 0, maxH = maxTowerH;
+        let requiredHeight = maxTowerH;
+        
+        for (let iter = 0; iter < 20; iter++) {
+          const testH = (minH + maxH) / 2;
+          const result = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, 0, targetElev + testH);
+          
+          if (result.visible) {
+            requiredHeight = testH;
+            maxH = testH;
+          } else {
+            minH = testH;
+          }
+        }
+        
+        radialData.push({
+          bearing,
+          visible: requiredHeight < maxTowerH,
+          visibleDist: radius,
+          blockElev: null,
+          blockDist: null,
+          requiredTowerHeight: requiredHeight
+        });
+        
+        if (requiredHeight < maxTowerH) visCount++; else blkCount++;
+      }
+    } else {
+      // Standard mode: use remote tower height
+      for (let i = 0; i < numRays; i++) {
+        const bearing = (i * angRes) % 360;
+        const target  = destPoint(lat, lng, bearing, radius);
+        const targetElev = getElevation(target.lat, target.lng) || 0;
+        const result  = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, 0, targetElev + remoteH);
 
-      radialData.push({
-        bearing,
-        visible:     result.visible,
-        visibleDist: result.visibleDist,
-        blockElev:   result.blockElev,
-        blockDist:   result.blockDist
-      });
-      if (result.visible) visCount++; else blkCount++;
+        radialData.push({
+          bearing,
+          visible:     result.visible,
+          visibleDist: result.visibleDist,
+          blockElev:   result.blockElev,
+          blockDist:   result.blockDist
+        });
+        if (result.visible) visCount++; else blkCount++;
+      }
     }
 
     setStatus(`Radial scan complete · ${numRays} rays · ${visCount} visible · ${blkCount} blocked`, false);
@@ -1047,12 +2220,36 @@ function generateRadial() {
     document.getElementById('rStatBlk').innerHTML     = `<span style="color:var(--danger)">${blkCount}</span>`;
     document.getElementById('rStatObsElev').innerHTML = `${Math.round(totalObsElev)}<span class="unit">m</span>`;
 
+    // Store params for terrain overlay
+    lastRadialParams = { lat, lng, radius, obsElev: totalObsElev };
+
     profilePanel.classList.remove('visible');
     radialPanel.classList.add('visible');
 
     drawRadial(radius);
     populateRadialTable();
+    // Draw terrain map with radial data available
+    if (radMapCanvas) {
+      drawTerrainMap(radMapCanvas, radMctx, lat, lng, radius);
+    }
   }, 30);
+}
+
+function getTowerHeightColor(norm) {
+  // Gradient from green (0m) to yellow (mid) to red (max)
+  if (norm < 0.5) {
+    const t = norm * 2;
+    const r = Math.round(78 + t * 177);
+    const g = Math.round(255);
+    const b = Math.round(160 * (1 - t));
+    return `rgba(${r},${g},${b},0.7)`;
+  } else {
+    const t = (norm - 0.5) * 2;
+    const r = Math.round(255);
+    const g = Math.round(255 * (1 - t));
+    const b = Math.round(64 * (1 - t));
+    return `rgba(${r},${g},${b},0.7)`;
+  }
 }
 
 /* ─── DRAW RADIAL POLAR ────────────────────────────────── */
@@ -1124,6 +2321,10 @@ function drawRadial(radius) {
   rctx.restore();
 
   /* ray wedges */
+  const showHeatmap = document.getElementById('showRadialHeatmap')?.checked || false;
+  const showTerrain = document.getElementById('showRadialTerrain')?.checked || false;
+  const maxTowerH = parseFloat(document.getElementById('radMaxTowerHeight')?.value || 50);
+  
   if (radialData.length > 0) {
     const halfAngle = (radialData.length > 1)
       ? (radialData[1].bearing - radialData[0].bearing) / 2 * DEG2RAD
@@ -1141,19 +2342,64 @@ function drawRadial(radius) {
 
       rctx.beginPath();
       rctx.moveTo(cx, cy);
-      rctx.arc(cx, cy, len, a1, a2);
+      rctx.arc(cx, cy, R, a1, a2);
       rctx.closePath();
 
-      if (ray.visible) {
-        rctx.fillStyle = 'rgba(78,255,160,0.55)';
+      if (showHeatmap && ray.requiredTowerHeight !== undefined) {
+        // Heatmap coloring based on required tower height
+        const norm = Math.min(ray.requiredTowerHeight / maxTowerH, 1);
+        const color = getTowerHeightColor(norm);
+        rctx.fillStyle = color;
       } else {
-        rctx.fillStyle = 'rgba(255,92,92,0.50)';
+        // Standard visibility coloring
+        if (ray.visible) {
+          rctx.fillStyle = 'rgba(78,255,160,0.55)';
+        } else {
+          rctx.fillStyle = 'rgba(255,92,92,0.50)';
+        }
       }
       rctx.fill();
-      rctx.strokeStyle = ray.visible ? 'rgba(78,255,160,0.2)' : 'rgba(255,92,92,0.2)';
+      rctx.strokeStyle = showHeatmap ? 'rgba(0,0,0,0.1)' : (ray.visible ? 'rgba(78,255,160,0.2)' : 'rgba(255,92,92,0.2)');
       rctx.lineWidth = 0.5;
       rctx.stroke();
     });
+  }
+
+  /* Terrain overlay */
+  if (showTerrain && lastRadialParams) {
+    rctx.save();
+    const { lat, lng } = lastRadialParams;
+    const terrainSamples = 72; // samples around circle
+    const radialSteps = 50; // distance steps
+    
+    for (let a = 0; a < terrainSamples; a++) {
+      const bearing = (a / terrainSamples) * 360;
+      const angleCentre = (bearing - 90) * DEG2RAD;
+      
+      for (let d = 1; d <= radialSteps; d++) {
+        const distKm = (d / radialSteps) * radius;
+        const pos = destPoint(lat, lng, bearing, distKm);
+        const elev = getElevation(pos.lat, pos.lng);
+        
+        if (elev !== null) {
+          // Simple elevation-based coloring
+          const norm = Math.max(0, Math.min(1, elev / 2000));
+          const alpha = 0.15;
+          const color = getElevationColor(norm).replace('rgb', 'rgba').replace(')', `,${alpha})`);
+          
+          const r = R * (distKm / radius);
+          const dr = R / radialSteps;
+          
+          rctx.beginPath();
+          rctx.moveTo(cx, cy);
+          rctx.arc(cx, cy, r, angleCentre - Math.PI/terrainSamples, angleCentre + Math.PI/terrainSamples);
+          rctx.closePath();
+          rctx.fillStyle = color;
+          rctx.fill();
+        }
+      }
+    }
+    rctx.restore();
   }
 
   /* observer dot */
@@ -1256,11 +2502,31 @@ btnClear.addEventListener('click', () => {
   profileData = []; radialData = [];
   profilePanel.classList.remove('visible');
   radialPanel.classList.remove('visible');
+  terrainMapPanel.classList.remove('visible');
   ['startLat','startLng','endLat','endLng','radLat','radLng','radRadius'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
   setStatus('', false);
   updateBtn();
+});
+
+// Add listener for heatmap checkbox - needs to regenerate data
+document.getElementById('showRadialHeatmap')?.addEventListener('change', () => {
+  if (radialData.length > 0) {
+    // Need to regenerate with heatmap data
+    const lat = parseFloat(document.getElementById('radLat').value);
+    const lng = parseFloat(document.getElementById('radLng').value);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      generateRadial();
+    }
+  }
+});
+
+// Add listener for terrain overlay - just redraw
+document.getElementById('showRadialTerrain')?.addEventListener('change', () => {
+  if (radialData.length > 0 && lastRadialParams) {
+    drawRadial(lastRadialParams.radius);
+  }
 });
 
 /* ═══════════════════════════════════════════════════════════
@@ -1283,6 +2549,17 @@ function niceStep(raw) {
 window.addEventListener('resize', () => {
   if (currentMode === 'ab' && profileData.length) drawProfile(cachedLOS);
 });
+
+// Initialize IndexedDB and auto-load tiles after everything is initialized
+initDB().then(() => {
+  console.log('IndexedDB initialized');
+  loadTilesFromStorage();
+}).catch(e => {
+  console.error('Failed to initialize database:', e);
+  setStatus('Failed to initialize storage: ' + e.message, true);
+});
+
+}); // End DOMContentLoaded
 </script>
 </body>
 </html>
