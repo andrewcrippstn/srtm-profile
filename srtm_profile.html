@@ -562,7 +562,7 @@
       </div>
       <div class="checkbox-group">
         <input type="checkbox" id="showUserTowers">
-        <label for="showUserTowers">User Towers</label>
+        <label for="showUserTowers">Manual Towers</label>
       </div>
       <div class="checkbox-group">
         <input type="checkbox" id="showMinTowers">
@@ -896,6 +896,22 @@ loadInputsFromStorage();
   if (el) el.addEventListener('input', saveInputsToStorage);
 });
 
+// Auto-update observer location when manual observer coordinates change
+['obsLat', 'obsLng'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', () => {
+      const obsLat = parseFloat(document.getElementById('obsLat').value);
+      const obsLng = parseFloat(document.getElementById('obsLng').value);
+      
+      if (!isNaN(obsLat) && !isNaN(obsLng)) {
+        observerLocation = { lat: obsLat, lng: obsLng };
+        drawTerrainMap();
+      }
+    });
+  }
+});
+
 // Auto-update A→B profile when target coordinates change
 ['endLat', 'endLng'].forEach(id => {
   const el = document.getElementById(id);
@@ -933,6 +949,11 @@ importToggle.addEventListener('click', () => {
 /* ═══════════════════════════════════════════════════════════
    TAB SWITCHING
    ═══════════════════════════════════════════════════════════ */
+function getActiveTab() {
+  const activeBtn = document.querySelector('.tab-btn.active');
+  return activeBtn ? activeBtn.dataset.tab : null;
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
@@ -1084,19 +1105,29 @@ function drawTerrainMap() {
   mctx.translate(-W/2 + mapOffsetX, -H/2 + mapOffsetY);
 
   // Calculate visible area for sampling (accounting for zoom/pan)
-  const viewLatRange = latRange / mapZoom;
-  const viewLngRange = lngRange / mapZoom;
-  const viewCenterLat = minLat + latRange / 2;
-  const viewCenterLng = minLng + lngRange / 2;
-  const viewMinLat = viewCenterLat - viewLatRange / 2 - (mapOffsetY / H) * viewLatRange;
-  const viewMaxLat = viewCenterLat + viewLatRange / 2 - (mapOffsetY / H) * viewLatRange;
-  const viewMinLng = viewCenterLng - viewLngRange / 2 + (mapOffsetX / W) * viewLngRange;
-  const viewMaxLng = viewCenterLng + viewLngRange / 2 + (mapOffsetX / W) * viewLngRange;
+  // After transform: point (x,y) in data space appears at screen position:
+  // screenX = W/2 + (x - W/2 + mapOffsetX) * mapZoom
+  // To find what's visible, we need to invert: what (x,y) appears at screen edges?
+  // For left edge (screenX = 0): 0 = W/2 + (x - W/2 + mapOffsetX) * mapZoom
+  // x = W/2 - mapOffsetX - W/(2*mapZoom)
+  const visibleDataMinX = W/2 - mapOffsetX - W/(2*mapZoom);
+  const visibleDataMaxX = W/2 - mapOffsetX + W/(2*mapZoom);
+  const visibleDataMinY = H/2 - mapOffsetY - H/(2*mapZoom);
+  const visibleDataMaxY = H/2 - mapOffsetY + H/(2*mapZoom);
+  
+  // Convert data space coordinates to lat/lng
+  const viewMinLng = minLng + (visibleDataMinX / W) * lngRange;
+  const viewMaxLng = minLng + (visibleDataMaxX / W) * lngRange;
+  const viewMaxLat = minLat + (1 - visibleDataMinY / H) * latRange;
+  const viewMinLat = minLat + (1 - visibleDataMaxY / H) * latRange;
+  const viewLatRange = viewMaxLat - viewMinLat;
+  const viewLngRange = viewMaxLng - viewMinLng;
 
   let minElev = Infinity, maxElev = -Infinity;
 
-  // Sample terrain in visible area
-  const sampleDensity = 250;
+  // Sample terrain in visible area only - adjust density based on zoom level
+  // Lower density when zoomed in (looking at small area), higher when zoomed out (looking at large area)
+  const sampleDensity = mapZoom > 3 ? 100 : (mapZoom > 1.5 ? 150 : 200);
   const samples = [];
   
   for (let y = 0; y < sampleDensity; y++) {
@@ -1117,8 +1148,8 @@ function drawTerrainMap() {
 
   const elevRange = maxElev - minElev || 1;
 
-  // Draw elevation as colored pixels
-  const pixelSize = Math.max(Math.ceil(W / sampleDensity) * mapZoom, 1) + 1;
+  // Draw elevation as colored pixels - size based on zoom to fill screen
+  const pixelSize = Math.max(Math.ceil((W / sampleDensity) * mapZoom), 1) + 1;
   samples.forEach(s => {
     const norm = (s.elev - minElev) / elevRange;
     const color = elevationColor(norm);
@@ -1286,6 +1317,9 @@ function drawMinimap(minLat, maxLat, minLng, maxLng, mainW, mainH) {
 mapCanvas.addEventListener('click', e => {
   if (!mapCanvas._mapParams) return;
   
+  // Only allow setting observer when on the observer tab
+  if (getActiveTab() !== 'observer') return;
+  
   const rect = mapCanvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
@@ -1340,13 +1374,13 @@ mapCanvas.addEventListener('mousemove', e => {
     mapHoverInfo.style.top = (my - 60) + 'px';
     mapHoverInfo.classList.add('visible');
     
-    // Check if hovering over a radial line
-    if (radialData && radialData.length > 0 && observerLocation) {
+    // Check if hovering over a radial line (only on A→B tab)
+    const activeTab = getActiveTab();
+    if (activeTab === 'ab' && radialData && radialData.length > 0 && observerLocation) {
       const hoveredRay = findHoveredRay(mx, my, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY);
       if (hoveredRay && hoveredRay.bearing !== currentBearing) {
         currentBearing = hoveredRay.bearing;
-        // Switch to A→B tab and update target
-        document.querySelector('[data-tab="ab"]').click();
+        // Update target without switching tabs
         const endPoint = destPoint(observerLocation.lat, observerLocation.lng, hoveredRay.bearing, hoveredRay.visibleDist);
         document.getElementById('endLat').value = endPoint.lat.toFixed(5);
         document.getElementById('endLng').value = endPoint.lng.toFixed(5);
@@ -1356,6 +1390,9 @@ mapCanvas.addEventListener('mousemove', e => {
         // Generate profile immediately
         generateProfile();
       }
+    } else if (activeTab !== 'ab') {
+      // Reset current bearing when not on A→B tab
+      currentBearing = null;
     }
   } else {
     mapHoverInfo.classList.remove('visible');
@@ -1417,7 +1454,10 @@ mapCanvas.addEventListener('mousemove', e => {
   mapOffsetY += dy / mapZoom;
   mapLastX = e.clientX;
   mapLastY = e.clientY;
-  drawTerrainMap();
+  
+  // Debounce drawing during pan
+  clearTimeout(window._panDrawTimer);
+  window._panDrawTimer = setTimeout(() => drawTerrainMap(), 16); // ~60fps
 });
 
 mapCanvas.addEventListener('mouseup', () => {
@@ -1436,7 +1476,11 @@ mapCanvas.addEventListener('wheel', e => {
   const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
   mapZoom *= zoomFactor;
   mapZoom = Math.max(0.5, Math.min(10, mapZoom));
-  drawTerrainMap();
+  document.getElementById('zoomIndicator').textContent = mapZoom.toFixed(1) + 'x';
+  
+  // Debounce drawing during zoom
+  clearTimeout(window._zoomDrawTimer);
+  window._zoomDrawTimer = setTimeout(() => drawTerrainMap(), 16); // ~60fps
 });
 
 // Minimap navigation
@@ -1754,27 +1798,65 @@ function drawProfile(los) {
   const rect = canvas.getBoundingClientRect();
   const W    = rect.width || 1060;
   const H    = rect.height || 320;
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
-  canvas.width  = W * dpr;
-  canvas.height = H * dpr;
+  
+  // Maintain aspect ratio based on data range
+  const validPoints = profileData.filter(p => p.elev !== null);
+  if (validPoints.length > 0) {
+    const maxDist  = profileData[profileData.length-1].dist;
+    const minElev  = Math.min(...validPoints.map(p => p.elev));
+    const maxElev  = Math.max(...validPoints.map(p => p.elev));
+    const elevRange = maxElev - minElev || 1;
+    
+    // Calculate aspect ratio: horizontal distance / vertical elevation
+    // Convert distance to meters (maxDist is in km)
+    const horizontalMeters = maxDist * 1000;
+    const dataAspectRatio = horizontalMeters / elevRange;
+    
+    // Adjust canvas to maintain natural aspect ratio (with reasonable limits)
+    const targetAspectRatio = Math.max(Math.min(dataAspectRatio / 100, 4), 2); // Limit between 2:1 and 4:1
+    const adjustedH = W / targetAspectRatio;
+    
+    canvas.style.width  = W + 'px';
+    canvas.style.height = adjustedH + 'px';
+    canvas.width  = W * dpr;
+    canvas.height = adjustedH * dpr;
+  } else {
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+  }
+  
   ctx.scale(dpr, dpr);
 
+  // Get actual canvas dimensions after aspect ratio adjustment
+  const actualW = parseFloat(canvas.style.width) || W;
+  const actualH = parseFloat(canvas.style.height) || H;
+  
   const pad = { top: 30, right: 28, bottom: 40, left: 62 };
-  const pw  = W - pad.left - pad.right;
-  const ph  = H - pad.top  - pad.bottom;
+  const pw  = actualW - pad.left - pad.right;
+  const ph  = actualH - pad.top  - pad.bottom;
 
-  const validPoints = profileData.filter(p => p.elev !== null);
-  const maxDist  = profileData[profileData.length-1].dist;
-  const minElev  = Math.min(...validPoints.map(p => p.elev));
-  const maxElev  = Math.max(...validPoints.map(p => p.elev));
-  const elevRange= maxElev - minElev || 1;
+  // Reuse validPoints from aspect ratio calculation if available, otherwise recalculate
+  let maxDist, minElev, maxElev, elevRange;
+  if (validPoints.length > 0) {
+    maxDist  = profileData[profileData.length-1].dist;
+    minElev  = Math.min(...validPoints.map(p => p.elev));
+    maxElev  = Math.max(...validPoints.map(p => p.elev));
+    elevRange= maxElev - minElev || 1;
+  } else {
+    const vp = profileData.filter(p => p.elev !== null);
+    maxDist  = profileData[profileData.length-1]?.dist || 0;
+    minElev  = vp.length > 0 ? Math.min(...vp.map(p => p.elev)) : 0;
+    maxElev  = vp.length > 0 ? Math.max(...vp.map(p => p.elev)) : 0;
+    elevRange= maxElev - minElev || 1;
+  }
   const padElev  = elevRange * 0.06;
 
   const toX = d => pad.left + (d / maxDist) * pw;
   const toY = e => pad.top  + ph - ((e - minElev + padElev) / (elevRange + padElev*2)) * ph;
 
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, actualW, actualH);
 
   /* grid */
   ctx.save();
@@ -1786,10 +1868,10 @@ function drawProfile(los) {
   const elevStart = Math.floor((minElev - padElev) / elevStep) * elevStep;
   for (let e = elevStart; e <= maxElev + padElev; e += elevStep) {
     const y = toY(e);
-    if (y < pad.top || y > H-pad.bottom) continue;
+    if (y < pad.top || y > actualH-pad.bottom) continue;
     ctx.strokeStyle = (e%(elevStep*2)===0) ? 'rgba(78,159,255,0.15)' : 'rgba(78,159,255,0.07)';
     ctx.lineWidth = 0.7;
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W-pad.right, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(actualW-pad.right, y); ctx.stroke();
     ctx.fillText(Math.round(e)+' m', pad.left-8, y);
   }
   ctx.textAlign = 'center';
@@ -1799,14 +1881,14 @@ function drawProfile(los) {
     const x = toX(d);
     ctx.strokeStyle = 'rgba(78,159,255,0.07)';
     ctx.lineWidth = 0.7;
-    ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, H-pad.bottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, actualH-pad.bottom); ctx.stroke();
     ctx.fillStyle = '#606878';
-    ctx.fillText(d.toFixed(1)+' km', x, H-pad.bottom+6);
+    ctx.fillText(d.toFixed(1)+' km', x, actualH-pad.bottom+6);
   }
   ctx.restore();
 
   /* filled area */
-  const grad = ctx.createLinearGradient(0, pad.top, 0, H-pad.bottom);
+  const grad = ctx.createLinearGradient(0, pad.top, 0, actualH-pad.bottom);
   grad.addColorStop(0, 'rgba(78,159,255,0.40)');
   grad.addColorStop(1, 'rgba(78,159,255,0.02)');
 
@@ -1820,8 +1902,8 @@ function drawProfile(los) {
   const lastValid  = [...profileData].reverse().find(p => p.elev !== null);
   const firstValid = profileData.find(p => p.elev !== null);
   if (lastValid && firstValid) {
-    ctx.lineTo(toX(lastValid.dist), H-pad.bottom);
-    ctx.lineTo(toX(firstValid.dist), H-pad.bottom);
+    ctx.lineTo(toX(lastValid.dist), actualH-pad.bottom);
+    ctx.lineTo(toX(firstValid.dist), actualH-pad.bottom);
     ctx.closePath();
   }
   ctx.fillStyle = grad;
@@ -1922,31 +2004,51 @@ function drawProfile(los) {
 
   // Draw minimum tower heights: line from start tower to end point, and end tower to start point
   if (showMinTowers && firstValid && lastValid) {
-    // Calculate height needed at start to see end
+    // Calculate height needed at start to see end at ground level (accounting for trees)
     let startHeightNeeded = 0;
+    const totalDist = lastValid.dist - firstValid.dist;
+    
     for (let i = 1; i < profileData.length - 1; i++) {
       if (profileData[i].elev === null) continue;
       const iDist = profileData[i].dist;
-      const iElev = profileData[i].elev + treeHeight;
-      const totalDist = lastValid.dist - firstValid.dist;
-      const lineElev = firstValid.elev + (lastValid.elev - firstValid.elev) * (iDist - firstValid.dist) / totalDist;
-      if (iElev > lineElev) {
-        startHeightNeeded = Math.max(startHeightNeeded, iElev - lineElev);
+      const iElev = profileData[i].elev + treeHeight; // Terrain + trees
+      
+      // Line of sight from start tower (height unknown) to end ground level
+      // At point i, the LOS elevation would be: startElev + h + (endElev - (startElev + h)) * progress
+      // Where progress = (iDist - firstValid.dist) / totalDist
+      // Simplifying: startElev + h * (1 - progress) + endElev * progress
+      const progress = (iDist - firstValid.dist) / totalDist;
+      
+      // We need: iElev <= startElev + h * (1 - progress) + endElev * progress
+      // Solving for h: h >= (iElev - startElev - endElev * progress) / (1 - progress)
+      if (progress < 1) {
+        const requiredH = (iElev - firstValid.elev - lastValid.elev * progress) / (1 - progress);
+        startHeightNeeded = Math.max(startHeightNeeded, requiredH);
       }
     }
+    startHeightNeeded = Math.max(0, startHeightNeeded);
 
-    // Calculate height needed at end to see start
+    // Calculate height needed at end to see start at ground level (accounting for trees)
     let endHeightNeeded = 0;
+    
     for (let i = 1; i < profileData.length - 1; i++) {
       if (profileData[i].elev === null) continue;
       const iDist = profileData[i].dist;
-      const iElev = profileData[i].elev + treeHeight;
-      const totalDist = lastValid.dist - firstValid.dist;
-      const lineElev = lastValid.elev + (firstValid.elev - lastValid.elev) * (lastValid.dist - iDist) / totalDist;
-      if (iElev > lineElev) {
-        endHeightNeeded = Math.max(endHeightNeeded, iElev - lineElev);
+      const iElev = profileData[i].elev + treeHeight; // Terrain + trees
+      
+      // Line of sight from end tower (height unknown) to start ground level
+      // At point i, the LOS elevation would be: endElev + h + (startElev - (endElev + h)) * reverseProgress
+      // Where reverseProgress = (lastValid.dist - iDist) / totalDist
+      const reverseProgress = (lastValid.dist - iDist) / totalDist;
+      
+      // We need: iElev <= endElev + h * (1 - reverseProgress) + startElev * reverseProgress
+      // Solving for h: h >= (iElev - endElev - startElev * reverseProgress) / (1 - reverseProgress)
+      if (reverseProgress < 1) {
+        const requiredH = (iElev - lastValid.elev - firstValid.elev * reverseProgress) / (1 - reverseProgress);
+        endHeightNeeded = Math.max(endHeightNeeded, requiredH);
       }
     }
+    endHeightNeeded = Math.max(0, endHeightNeeded);
 
     ctx.save();
     
@@ -2171,6 +2273,7 @@ function generateRadial() {
   const obsH    = parseFloat(document.getElementById('obsHeight').value) || 0;
   const remoteH = parseFloat(document.getElementById('radMaxTowerHeight').value) || 0;
   const showHeatmap = document.getElementById('showRadialHeatmap')?.checked || false;
+  const treeH   = parseFloat(document.getElementById('treeHeight')?.value || 5);
 
   if (isNaN(lat)||isNaN(lng)||isNaN(radius)) { 
     setStatus('Observer location and radius are required.', true); 
@@ -2211,7 +2314,7 @@ function generateRadial() {
         
         for (let iter = 0; iter < 20; iter++) {
           const testH = (minH + maxH) / 2;
-          const result = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, 0, targetElev + testH);
+          const result = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, treeH, targetElev + testH);
           
           if (result.visible) {
             requiredHeight = testH;
@@ -2240,7 +2343,7 @@ function generateRadial() {
         if (targetElev === null) continue;
         
         const totalTargetElev = targetElev + remoteH;
-        const result  = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, 0, totalTargetElev);
+        const result  = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, treeH, totalTargetElev);
 
         radialData.push({
           bearing,
@@ -2254,7 +2357,52 @@ function generateRadial() {
     }
 
     setStatus(`Radial scan complete · ${numRays} rays · ${visCount} visible · ${blkCount} blocked`, false);
+    
+    // First draw to get the map parameters
     drawTerrainMap();
+    
+    // Zoom into radial LOS area - calculate actual extent of radial lines
+    if (observerLocation && radialData && radialData.length > 0 && mapCanvas._mapParams) {
+      // Find the actual extent of the radial lines
+      let radMinLat = observerLocation.lat, radMaxLat = observerLocation.lat;
+      let radMinLng = observerLocation.lng, radMaxLng = observerLocation.lng;
+      
+      radialData.forEach(ray => {
+        const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, ray.visibleDist);
+        radMinLat = Math.min(radMinLat, endPoint.lat);
+        radMaxLat = Math.max(radMaxLat, endPoint.lat);
+        radMinLng = Math.min(radMinLng, endPoint.lng);
+        radMaxLng = Math.max(radMaxLng, endPoint.lng);
+      });
+      
+      // Get map parameters from the drawn canvas
+      const { minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H } = mapCanvas._mapParams;
+      
+      // Add padding to radial extent (10% on each side)
+      const radLatRange = (radMaxLat - radMinLat) * 1.2;
+      const radLngRange = (radMaxLng - radMinLng) * 1.2;
+      
+      // Calculate zoom to fit radial area
+      const zoomLat = latRange / radLatRange;
+      const zoomLng = lngRange / radLngRange;
+      mapZoom = Math.min(zoomLat, zoomLng, 10); // Cap at 10x
+      
+      // Calculate offset to center on observer
+      // Observer position in canvas data coordinates (0,0 to W,H):
+      const obsPosX = W * (observerLocation.lng - minLng) / lngRange;
+      const obsPosY = H * (1 - (observerLocation.lat - minLat) / latRange);
+      
+      // Transform: translate(W/2, H/2) -> scale(zoom) -> translate(-W/2 + offsetX, -H/2 + offsetY)
+      // For observer at (obsPosX, obsPosY) to be at screen center (W/2, H/2):
+      // W/2 + (obsPosX - W/2 + offsetX) * zoom = W/2
+      // (obsPosX - W/2 + offsetX) * zoom = 0
+      // offsetX = W/2 - obsPosX
+      mapOffsetX = W/2 - obsPosX;
+      mapOffsetY = H/2 - obsPosY;
+      
+      document.getElementById('zoomIndicator').textContent = mapZoom.toFixed(1) + 'x';
+      drawTerrainMap();
+    }
   }, 30);
 }
 
