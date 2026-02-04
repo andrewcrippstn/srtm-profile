@@ -1065,7 +1065,7 @@ function drawTerrainMap() {
   const dpr = window.devicePixelRatio || 1;
   const rect = mapCanvas.parentElement.getBoundingClientRect();
   const containerW = Math.max(Math.floor(rect.width), 600);
-  const containerH = Math.max(Math.floor(rect.height), 300);
+  const containerH = 400;
   
   const dataAspectRatio = lngRange / latRange;
   const containerAspectRatio = containerW / containerH;
@@ -1149,7 +1149,7 @@ function drawTerrainMap() {
   const elevRange = maxElev - minElev || 1;
 
   // Draw elevation as colored pixels - size based on zoom to fill screen
-  const pixelSize = Math.max(Math.ceil((W / sampleDensity) * mapZoom), 1) + 1;
+  const pixelSize = Math.max(Math.ceil(W / sampleDensity) * mapZoom, 1) + 1;
   samples.forEach(s => {
     const norm = (s.elev - minElev) / elevRange;
     const color = elevationColor(norm);
@@ -1688,7 +1688,9 @@ function generateProfile() {
   }
 
   const startElev = profileData.find(p => p.elev !== null)?.elev ?? 0;
-  const losResult = checkLOS(sLat, sLng, startElev, eLat, eLng, N);
+  const obsH = parseFloat(document.getElementById('obsHeight')?.value || 0);
+  const treeH = parseFloat(document.getElementById('treeHeight')?.value || 5);
+  const losResult = checkLOS(sLat, sLng, startElev + obsH, eLat, eLng, N, treeH);
 
   setStatus(`Profile generated · ${N+1} samples · ${dist.toFixed(2)} km`, false);
 
@@ -2324,12 +2326,15 @@ function generateRadial() {
           }
         }
         
+        // Check actual visibility with the required height to get correct visibleDist
+        const finalResult = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, treeH, targetElev + requiredHeight);
+        
         radialData.push({
           bearing,
           visible: requiredHeight < maxTowerH,
-          visibleDist: radius,
-          blockElev: null,
-          blockDist: null,
+          visibleDist: finalResult.visible ? radius : finalResult.visibleDist,
+          blockElev: finalResult.blockElev,
+          blockDist: finalResult.blockDist,
           requiredTowerHeight: requiredHeight
         });
         
