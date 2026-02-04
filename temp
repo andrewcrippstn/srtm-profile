@@ -5,6 +5,8 @@
 update observer location when manually input changed.
 terrain profile needs to maintain aspect ratio when window size is changed. currently it streaches.
 
+zoom into radial LOS on the terrain map when radial los is generated.
+
 min max tower height needs to account for trees.
 
 change "use towers" to "manual towers"
