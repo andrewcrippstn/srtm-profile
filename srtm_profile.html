@@ -1185,17 +1185,33 @@ function drawTerrainMap() {
     mctx.lineWidth = 2;
     
     radialData.forEach(ray => {
-      mctx.strokeStyle = ray.visible ? 'rgba(78,255,160,0.6)' : 'rgba(255,92,92,0.6)';
-      
-      const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, ray.visibleDist);
+      const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, ray.radius);
       const ex = toCanvasX(endPoint.lng);
       const ey = toCanvasY(endPoint.lat);
       
+      // Calculate the obstruction point (first hill obstruction, no trees)
+      const obstructionDist = ray.hillBlockDist || ray.radius;
+      const obstructionPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, obstructionDist);
+      const ox = toCanvasX(obstructionPoint.lng);
+      const oy = toCanvasY(obstructionPoint.lat);
+      
+      // Draw green section from observer to first obstruction
+      mctx.strokeStyle = 'rgba(78,255,160,0.6)';
       mctx.beginPath();
       mctx.moveTo(cx, cy);
-      mctx.lineTo(ex, ey);
+      mctx.lineTo(ox, oy);
       mctx.stroke();
       
+      // Draw red section from obstruction to max radius (if obstructed)
+      if (obstructionDist < ray.radius) {
+        mctx.strokeStyle = 'rgba(255,92,92,0.6)';
+        mctx.beginPath();
+        mctx.moveTo(ox, oy);
+        mctx.lineTo(ex, ey);
+        mctx.stroke();
+      }
+      
+      // Draw endpoint marker
       mctx.beginPath();
       mctx.arc(ex, ey, 3, 0, Math.PI*2);
       mctx.fillStyle = ray.visible ? 'rgba(78,255,160,0.8)' : 'rgba(255,92,92,0.8)';
@@ -1322,9 +1338,17 @@ mapCanvas.addEventListener('click', e => {
   
   const { minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY } = mapCanvas._mapParams;
   
+  // Account for any CSS scaling between canvas logical size and display size
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  const canvasX = mx * scaleX;
+  const canvasY = my * scaleY;
+  
   // Inverse transform to get data space coordinates
-  const tx = (mx - W/2) / zoom - offsetX + W/2;
-  const ty = (my - H/2) / zoom - offsetY + H/2;
+  // Forward: screenX = W/2 + (dataX - W/2 + offsetX) * zoom
+  // Inverse: dataX = (screenX - W/2) / zoom + W/2 - offsetX
+  const tx = (canvasX - W/2) / zoom + W/2 - offsetX;
+  const ty = (canvasY - H/2) / zoom + H/2 - offsetY;
   
   if (tx >= 0 && tx <= W && ty >= 0 && ty <= H) {
     const lng = minLng + (tx / W) * lngRange;
@@ -1348,7 +1372,7 @@ mapCanvas.addEventListener('click', e => {
         if (hoveredRay) {
           // Clicked on a radial line - update target to that line's endpoint
           selectedBearing = hoveredRay.bearing; // Remember this selection
-          const endPoint = destPoint(observerLocation.lat, observerLocation.lng, hoveredRay.bearing, hoveredRay.visibleDist);
+          const endPoint = destPoint(observerLocation.lat, observerLocation.lng, hoveredRay.bearing, hoveredRay.radius);
           targetLocation = { lat: endPoint.lat, lng: endPoint.lng };
           document.getElementById('endLat').value = endPoint.lat.toFixed(5);
           document.getElementById('endLng').value = endPoint.lng.toFixed(5);
@@ -1425,9 +1449,15 @@ mapCanvas.addEventListener('mousemove', e => {
   
   const { minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY } = mapCanvas._mapParams;
   
+  // Account for any CSS scaling between canvas logical size and display size
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  const canvasX = mx * scaleX;
+  const canvasY = my * scaleY;
+  
   // Inverse transform to get data space coordinates
-  const tx = (mx - W/2) / zoom - offsetX + W/2;
-  const ty = (my - H/2) / zoom - offsetY + H/2;
+  const tx = (canvasX - W/2) / zoom + W/2 - offsetX;
+  const ty = (canvasY - H/2) / zoom + H/2 - offsetY;
   
   if (tx < 0 || tx > W || ty < 0 || ty > H) {
     mapHoverInfo.classList.remove('visible');
@@ -1449,7 +1479,7 @@ mapCanvas.addEventListener('mousemove', e => {
     // Check if hovering over a radial line (only on A→B tab)
     const activeTab = getActiveTab();
     if (activeTab === 'ab' && radialData && radialData.length > 0 && observerLocation) {
-      const hoveredRay = findHoveredRay(mx, my, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY);
+      const hoveredRay = findHoveredRay(canvasX, canvasY, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY);
       
       // Use hovered ray if hovering, otherwise use selected ray
       const rayToShow = hoveredRay || (selectedBearing !== null ? radialData.find(r => r.bearing === selectedBearing) : null);
@@ -1459,7 +1489,7 @@ mapCanvas.addEventListener('mousemove', e => {
         currentBearing = rayBearing;
         
         // Calculate endpoint but DON'T update targetLocation (to avoid map redraw)
-        const endPoint = destPoint(observerLocation.lat, observerLocation.lng, rayToShow.bearing, rayToShow.visibleDist);
+        const endPoint = destPoint(observerLocation.lat, observerLocation.lng, rayToShow.bearing, rayToShow.radius);
         
         // Update input fields only (don't update targetLocation to avoid triggering map redraw)
         document.getElementById('endLat').value = endPoint.lat.toFixed(5);
@@ -1510,30 +1540,28 @@ mapCanvas.addEventListener('mouseleave', () => {
 function findHoveredRay(mx, my, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY) {
   if (!observerLocation || !radialData || radialData.length === 0) return null;
   
-  // Convert lat/lng to canvas data space coordinates (before transformation)
-  const toCanvasX = (lng) => W * (lng - minLng) / lngRange;
-  const toCanvasY = (lat) => H * (1 - (lat - minLat) / latRange);
+  // Convert mouse position to data space coordinates
+  // Forward: screenX = W/2 + (dataX - W/2 + offsetX) * zoom
+  // Inverse: dataX = (screenX - W/2) / zoom + W/2 - offsetX
+  const mouseDataX = (mx - W/2) / zoom + W/2 - offsetX;
+  const mouseDataY = (my - H/2) / zoom + H/2 - offsetY;
   
-  const cx = toCanvasX(observerLocation.lng);
-  const cy = toCanvasY(observerLocation.lat);
+  const mouseLng = minLng + (mouseDataX / W) * lngRange;
+  const mouseLat = minLat + (1 - mouseDataY / H) * latRange;
   
-  let minDist = 15; // pixel threshold
+  // Calculate bearing from observer to mouse
+  const mouseBearing = bearing(observerLocation.lat, observerLocation.lng, mouseLat, mouseLng);
+  
+  // Find the ray with the closest bearing to the mouse position
   let closestRay = null;
+  let minAngleDiff = Infinity;
   
   radialData.forEach(ray => {
-    const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, ray.visibleDist);
-    const ex = toCanvasX(endPoint.lng);
-    const ey = toCanvasY(endPoint.lat);
+    let angleDiff = Math.abs(ray.bearing - mouseBearing);
+    if (angleDiff > 180) angleDiff = 360 - angleDiff;
     
-    // Transform canvas coordinates to screen space
-    const scx = (cx - W/2) * zoom + W/2 + offsetX * zoom;
-    const scy = (cy - H/2) * zoom + H/2 + offsetY * zoom;
-    const sex = (ex - W/2) * zoom + W/2 + offsetX * zoom;
-    const sey = (ey - H/2) * zoom + H/2 + offsetY * zoom;
-    
-    const dist = distanceToLineSegment(mx, my, scx, scy, sex, sey);
-    if (dist < minDist) {
-      minDist = dist;
+    if (angleDiff < minAngleDiff) {
+      minAngleDiff = angleDiff;
       closestRay = ray;
     }
   });
@@ -1693,6 +1721,15 @@ function destPoint(lat, lng, bearingDeg, distKm) {
   const lat2 = Math.asin(Math.sin(lat1)*Math.cos(d) + Math.cos(lat1)*Math.sin(d)*Math.cos(brng));
   const lng2 = lng1 + Math.atan2(Math.sin(brng)*Math.sin(d)*Math.cos(lat1), Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
   return { lat: lat2 * RAD2DEG, lng: lng2 * RAD2DEG };
+}
+
+function bearing(lat1, lng1, lat2, lng2) {
+  const dLng = (lng2 - lng1) * DEG2RAD;
+  const y = Math.sin(dLng) * Math.cos(lat2 * DEG2RAD);
+  const x = Math.cos(lat1 * DEG2RAD) * Math.sin(lat2 * DEG2RAD) - 
+            Math.sin(lat1 * DEG2RAD) * Math.cos(lat2 * DEG2RAD) * Math.cos(dLng);
+  const brng = Math.atan2(y, x) * RAD2DEG;
+  return (brng + 360) % 360; // Normalize to 0-360
 }
 
 function distanceToLineSegment(px, py, x1, y1, x2, y2) {
@@ -2455,13 +2492,18 @@ function generateRadial() {
         // Check actual visibility with the required height to get correct visibleDist
         const finalResult = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, treeH, targetElev + requiredHeight);
         
+        // Calculate first hill obstruction (without trees) for visualization
+        const hillResult = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, 0, targetElev + requiredHeight);
+        
         radialData.push({
           bearing,
           visible: requiredHeight < maxTowerH,
           visibleDist: finalResult.visible ? radius : finalResult.visibleDist,
           blockElev: finalResult.blockElev,
           blockDist: finalResult.blockDist,
-          requiredTowerHeight: requiredHeight
+          requiredTowerHeight: requiredHeight,
+          radius: radius,
+          hillBlockDist: hillResult.visibleDist  // Distance to first hill obstruction (no trees)
         });
         
         if (requiredHeight < maxTowerH) visCount++; else blkCount++;
@@ -2486,6 +2528,9 @@ function generateRadial() {
         }
         
         const result  = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, treeH, totalTargetElev);
+        
+        // Calculate first hill obstruction (without trees) for visualization
+        const hillResult = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, 0, totalTargetElev);
 
         radialData.push({
           bearing,
@@ -2495,7 +2540,9 @@ function generateRadial() {
           blockDist:   result.blockDist,
           blockages:   result.blockages,
           profileData: rayProfileData,
-          losResult:   result
+          losResult:   result,
+          radius:      radius,
+          hillBlockDist: hillResult.visibleDist  // Distance to first hill obstruction (no trees)
         });
         if (result.visible) visCount++; else blkCount++;
       }
@@ -2513,7 +2560,7 @@ function generateRadial() {
       let radMinLng = observerLocation.lng, radMaxLng = observerLocation.lng;
       
       radialData.forEach(ray => {
-        const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, ray.visibleDist);
+        const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, ray.radius);
         radMinLat = Math.min(radMinLat, endPoint.lat);
         radMaxLat = Math.max(radMaxLat, endPoint.lat);
         radMinLng = Math.min(radMinLng, endPoint.lng);
