@@ -561,11 +561,11 @@
       </div>
       <div style="font-size: 0.65rem; color: var(--text-dim); letter-spacing: 0.08em; margin-top: 8px; text-transform: uppercase;">Display Options</div>
       <div class="checkbox-group">
-        <input type="checkbox" id="showLOS" checked>
+        <input type="checkbox" id="showLOS">
         <label for="showLOS">Line of Sight</label>
       </div>
       <div class="checkbox-group">
-        <input type="checkbox" id="showUserTowers">
+        <input type="checkbox" id="showUserTowers" checked>
         <label for="showUserTowers">Manual Towers</label>
       </div>
       <div class="checkbox-group">
@@ -692,6 +692,7 @@ let observerLocation = null; // {lat, lng}
 let targetLocation = null;   // {lat, lng} for A→B
 let currentBearing = null;   // bearing being hovered
 let selectedBearing = null;  // bearing selected by click
+let hoverDistance = null;    // distance along radial line where mouse is hovering
 
 /* ═══════════════════════════════════════════════════════════
    INDEXEDDB HELPERS (for large HGT files)
@@ -890,6 +891,16 @@ loadInputsFromStorage();
 ['obsLat','obsLng','obsHeight','endLat','endLng','radRadius','startTowerHeight','endTowerHeight','treeHeight','radMaxTowerHeight'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', saveInputsToStorage);
+});
+
+// Sync observer tower height between Observer tab and Profile Options
+document.getElementById('obsHeight')?.addEventListener('input', (e) => {
+  document.getElementById('startTowerHeight').value = e.target.value;
+  if (profileData.length > 0) drawProfile(cachedLOS);
+});
+document.getElementById('startTowerHeight')?.addEventListener('input', (e) => {
+  document.getElementById('obsHeight').value = e.target.value;
+  if (profileData.length > 0) drawProfile(cachedLOS);
 });
 
 // Auto-update observer location when manual observer coordinates change
@@ -1481,6 +1492,9 @@ mapCanvas.addEventListener('mousemove', e => {
     if (activeTab === 'ab' && radialData && radialData.length > 0 && observerLocation) {
       const hoveredRay = findHoveredRay(canvasX, canvasY, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY);
       
+      // Calculate distance from observer to hover point for profile cursor
+      hoverDistance = haversine(observerLocation.lat, observerLocation.lng, lat, lng);
+      
       // Use hovered ray if hovering, otherwise use selected ray
       const rayToShow = hoveredRay || (selectedBearing !== null ? radialData.find(r => r.bearing === selectedBearing) : null);
       const rayBearing = rayToShow ? rayToShow.bearing : null;
@@ -1526,15 +1540,18 @@ mapCanvas.addEventListener('mousemove', e => {
     } else if (activeTab !== 'ab') {
       // Reset current bearing when not on A→B tab
       currentBearing = null;
+      hoverDistance = null;
     }
   } else {
     mapHoverInfo.classList.remove('visible');
+    hoverDistance = null;
   }
 });
 
 mapCanvas.addEventListener('mouseleave', () => {
   mapHoverInfo.classList.remove('visible');
   currentBearing = null;
+  hoverDistance = null;
 });
 
 function findHoveredRay(mx, my, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY) {
@@ -2343,9 +2360,10 @@ function drawProfile(los) {
         const distFromEnd = Math.abs(block.dist - (lastValid ? lastValid.dist : 0));
         if (distFromEnd < 0.01 && endWithTower >= block.elev) return;
         
-        // Draw X mark at this transition point
+        // Calculate position on LOS line (which is drawn at terrain level) at this distance
         const bx = toX(block.dist);
-        const by = toY(block.elev);
+        const t = (bx - x1) / (x2 - x1);
+        const by = y1 + (y2 - y1) * t;
         
         ctx.beginPath();
         ctx.moveTo(bx-6, by-6); ctx.lineTo(bx+6, by+6);
@@ -2354,6 +2372,221 @@ function drawProfile(los) {
       });
       
       ctx.restore();
+    }
+  }
+  
+  // Helper function to find obstructions for any line (entry/exit points only)
+  function findLineObstructions(x1, y1, x2, y2) {
+    const obstructions = [];
+    const treeH = parseFloat(document.getElementById('treeHeight')?.value || 0);
+    let wasBlocked = false;
+    
+    for (let i = 1; i < profileData.length - 1; i++) {
+      if (profileData[i].elev === null) continue;
+      
+      const dist = profileData[i].dist;
+      const terrainElev = profileData[i].elev + treeH;
+      const terrainY = toY(terrainElev);
+      
+      // Calculate line Y position at this distance
+      const px = toX(dist);
+      const t = (px - x1) / (x2 - x1);
+      const lineY = y1 + (y2 - y1) * t;
+      
+      const isBlocked = terrainY < lineY; // terrain Y is smaller (higher on canvas) means it blocks
+      
+      // Only mark entry and exit points
+      if (isBlocked && !wasBlocked) {
+        // Entering obstruction - store X position and Y position on the line
+        obstructions.push({ x: px, y: lineY, type: 'entry' });
+      } else if (!isBlocked && wasBlocked) {
+        // Exiting obstruction - mark previous point
+        if (i > 1 && profileData[i-1].elev !== null) {
+          const prevDist = profileData[i-1].dist;
+          const prevPx = toX(prevDist);
+          const prevT = (prevPx - x1) / (x2 - x1);
+          const prevLineY = y1 + (y2 - y1) * prevT;
+          obstructions.push({ x: prevPx, y: prevLineY, type: 'exit' });
+        }
+      }
+      
+      wasBlocked = isBlocked;
+    }
+    
+    return obstructions;
+  }
+  
+  // Draw obstruction markers for manual towers
+  if (showUserTowers && firstValid && lastValid) {
+    const startTowerH = parseFloat(document.getElementById('startTowerHeight')?.value || 0);
+    const endTowerH = parseFloat(document.getElementById('endTowerHeight')?.value || 0);
+    
+    const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev + startTowerH);
+    const x2 = toX(lastValid.dist), y2 = toY(lastValid.elev + endTowerH);
+    
+    const obstructions = findLineObstructions(x1, y1, x2, y2);
+    
+    if (obstructions.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#ffb340';
+      ctx.lineWidth = 2;
+      
+      obstructions.forEach(obs => {
+        ctx.beginPath();
+        ctx.moveTo(obs.x-5, obs.y-5); ctx.lineTo(obs.x+5, obs.y+5);
+        ctx.moveTo(obs.x+5, obs.y-5); ctx.lineTo(obs.x-5, obs.y+5);
+        ctx.stroke();
+      });
+      
+      ctx.restore();
+    }
+  }
+  
+  // Draw obstruction markers for minimum towers
+  if (showMinTowers && firstValid && lastValid) {
+    const treeH = parseFloat(document.getElementById('treeHeight')?.value || 0);
+    const totalDist = lastValid.dist - firstValid.dist;
+    
+    // Calculate minimum tower heights (same logic as before)
+    let startHeightNeeded = 0;
+    for (let i = 1; i < profileData.length - 1; i++) {
+      if (profileData[i].elev === null) continue;
+      const iDist = profileData[i].dist;
+      const iElev = profileData[i].elev + treeH;
+      const progress = (iDist - firstValid.dist) / totalDist;
+      if (progress < 1) {
+        const requiredH = (iElev - firstValid.elev - lastValid.elev * progress) / (1 - progress);
+        startHeightNeeded = Math.max(startHeightNeeded, requiredH);
+      }
+    }
+    startHeightNeeded = Math.max(0, startHeightNeeded);
+    
+    let endHeightNeeded = 0;
+    for (let i = 1; i < profileData.length - 1; i++) {
+      if (profileData[i].elev === null) continue;
+      const iDist = profileData[i].dist;
+      const iElev = profileData[i].elev + treeH;
+      const reverseProgress = (lastValid.dist - iDist) / totalDist;
+      if (reverseProgress < 1) {
+        const requiredH = (iElev - lastValid.elev - firstValid.elev * reverseProgress) / (1 - reverseProgress);
+        endHeightNeeded = Math.max(endHeightNeeded, requiredH);
+      }
+    }
+    endHeightNeeded = Math.max(0, endHeightNeeded);
+    
+    // Draw obstructions for start tower line
+    if (startHeightNeeded > 0) {
+      const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev + startHeightNeeded);
+      const x2 = toX(lastValid.dist), y2 = toY(lastValid.elev);
+      const obstructions = findLineObstructions(x1, y1, x2, y2);
+      
+      if (obstructions.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,179,64,1)';
+        ctx.lineWidth = 2;
+        
+        obstructions.forEach(obs => {
+          ctx.beginPath();
+          ctx.moveTo(obs.x-5, obs.y-5); ctx.lineTo(obs.x+5, obs.y+5);
+          ctx.moveTo(obs.x+5, obs.y-5); ctx.lineTo(obs.x-5, obs.y+5);
+          ctx.stroke();
+        });
+        
+        ctx.restore();
+      }
+    }
+    
+    // Draw obstructions for end tower line
+    if (endHeightNeeded > 0) {
+      const x1 = toX(lastValid.dist), y1 = toY(lastValid.elev + endHeightNeeded);
+      const x2 = toX(firstValid.dist), y2 = toY(firstValid.elev);
+      const obstructions = findLineObstructions(x1, y1, x2, y2);
+      
+      if (obstructions.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,140,100,1)';
+        ctx.lineWidth = 2;
+        
+        obstructions.forEach(obs => {
+          ctx.beginPath();
+          ctx.moveTo(obs.x-5, obs.y-5); ctx.lineTo(obs.x+5, obs.y+5);
+          ctx.moveTo(obs.x+5, obs.y-5); ctx.lineTo(obs.x-5, obs.y+5);
+          ctx.stroke();
+        });
+        
+        ctx.restore();
+      }
+    }
+  }
+  
+  // Draw obstruction markers for optimal towers
+  if (showOptimalTowers && firstValid && lastValid) {
+    const optimal = calculateOptimalTowers(firstValid.elev, lastValid.elev);
+    
+    if (optimal) {
+      const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev + optimal.startHeight);
+      const x2 = toX(lastValid.dist), y2 = toY(lastValid.elev + optimal.endHeight);
+      const obstructions = findLineObstructions(x1, y1, x2, y2);
+      
+      if (obstructions.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = '#4effa0';
+        ctx.lineWidth = 2;
+        
+        obstructions.forEach(obs => {
+          ctx.beginPath();
+          ctx.moveTo(obs.x-5, obs.y-5); ctx.lineTo(obs.x+5, obs.y+5);
+          ctx.moveTo(obs.x+5, obs.y-5); ctx.lineTo(obs.x-5, obs.y+5);
+          ctx.stroke();
+        });
+        
+        ctx.restore();
+      }
+    }
+  }
+
+  /* ─── HOVER CURSOR on radial line ─── */
+  if (hoverDistance !== null && firstValid && lastValid) {
+    const maxDist = lastValid.dist;
+    if (hoverDistance >= 0 && hoverDistance <= maxDist) {
+      const hx = toX(hoverDistance);
+      
+      // Find closest profile point to interpolate elevation
+      let hoverElev = null;
+      for (let i = 0; i < profileData.length - 1; i++) {
+        if (profileData[i].elev !== null && profileData[i+1].elev !== null) {
+          if (hoverDistance >= profileData[i].dist && hoverDistance <= profileData[i+1].dist) {
+            const t = (hoverDistance - profileData[i].dist) / (profileData[i+1].dist - profileData[i].dist);
+            hoverElev = profileData[i].elev + t * (profileData[i+1].elev - profileData[i].elev);
+            break;
+          }
+        }
+      }
+      
+      if (hoverElev !== null) {
+        const hy = toY(hoverElev);
+        
+        // Draw vertical line
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 180, 64, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(hx, pad.top);
+        ctx.lineTo(hx, actualH - pad.bottom);
+        ctx.stroke();
+        
+        // Draw circle at intersection with terrain
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffb440';
+        ctx.fill();
+        ctx.strokeStyle = '#0a0c0f';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   }
 
