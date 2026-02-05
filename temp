@@ -2,16 +2,10 @@
 
 -42.010696, 146.721765
 
-update observer location when manually input changed.
-terrain profile needs to maintain aspect ratio when window size is changed. currently it streaches.
+radial lines need to show areas that have line of sight to the observer.
 
-zoom into radial LOS on the terrain map when radial los is generated.
+the A->B profile just needs to show the path under the mouse
 
-min max tower height needs to account for trees.
-
-change "use towers" to "manual towers"
 
 Future
 allow drag and drop of observer and remore end in path profile to update gps location.
-radial lines are not working correclty review what i am trying to achieve. look at topography. is it first time los is lost.  what about section after this. it should be a dashed line showing areas with los.
-also add this to profile. eg arcs showing the sections along the route that have los from the observer. both of these should consider tower heights.
