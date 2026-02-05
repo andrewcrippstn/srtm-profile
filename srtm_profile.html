@@ -968,6 +968,12 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tab}`));
     
+    // Clear radial lines when switching to Observer tab
+    if (tab === 'observer') {
+      radialData = [];
+      drawTerrainMap();
+    }
+    
     // Show profile panels for A→B tab
     const profilePanel = document.getElementById('profilePanel');
     const profileOptionsPanel = document.getElementById('profileOptionsPanel');
@@ -1239,45 +1245,114 @@ function drawTerrainMap() {
     const y2 = toCanvasY(targetLocation.lat);
     
     mctx.strokeStyle = '#4e9fff';
-    mctx.lineWidth = 3;
-    mctx.setLineDash([8, 4]);
+    mctx.lineWidth = 3 / mapZoom;
+    mctx.setLineDash([8 / mapZoom, 4 / mapZoom]);
     mctx.beginPath();
     mctx.moveTo(x1, y1);
     mctx.lineTo(x2, y2);
     mctx.stroke();
     mctx.setLineDash([]);
     
-    // Draw target marker
+    // Draw target marker - scale inversely with zoom
     mctx.beginPath();
-    mctx.arc(x2, y2, 6, 0, Math.PI*2);
+    mctx.arc(x2, y2, 6 / mapZoom, 0, Math.PI*2);
     mctx.fillStyle = '#4e9fff';
     mctx.fill();
     mctx.strokeStyle = '#0a0c0f';
-    mctx.lineWidth = 2;
+    mctx.lineWidth = 2 / mapZoom;
     mctx.stroke();
   }
 
-  // Draw observer marker if set
+  // Draw observer marker if set - scale inversely with zoom
   if (observerLocation) {
     const ox = toCanvasX(observerLocation.lng);
     const oy = toCanvasY(observerLocation.lat);
     
     mctx.beginPath();
-    mctx.arc(ox, oy, 8, 0, Math.PI*2);
+    mctx.arc(ox, oy, 8 / mapZoom, 0, Math.PI*2);
     mctx.fillStyle = '#4effa0';
     mctx.fill();
     mctx.strokeStyle = '#0a0c0f';
-    mctx.lineWidth = 2;
+    mctx.lineWidth = 2 / mapZoom;
     mctx.stroke();
   }
 
   mctx.restore();
+  
+  // Draw elevation legend
+  drawElevationLegend(mctx, W, H);
 
   mapCanvas._mapParams = { minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom: mapZoom, offsetX: mapOffsetX, offsetY: mapOffsetY };
 
   document.getElementById('zoomIndicator').textContent = mapZoom.toFixed(1) + 'x';
 
   drawMinimap(minLat, maxLat, minLng, maxLng, W, H);
+}
+
+function drawElevationLegend(ctx, canvasW, canvasH) {
+  const legendW = 120;
+  const legendH = 340;
+  const legendX = 20;
+  const legendY = canvasH - legendH - 20;
+  const barW = 30;
+  const barX = legendX + 10;
+  const barY = legendY + 30;
+  const barH = legendH - 50;
+  
+  // Background
+  ctx.fillStyle = 'rgba(10, 12, 15, 0.85)';
+  ctx.fillRect(legendX, legendY, legendW, legendH);
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(legendX, legendY, legendW, legendH);
+  
+  // Title
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Elevation', legendX + legendW/2, legendY + 18);
+  
+  // Draw gradient bar (top to bottom = high to low)
+  // Map 0-2900m range to gradient
+  const steps = 100;
+  const minElev = 0;
+  const maxElev = 2900;
+  const elevRange = maxElev - minElev;
+  
+  for (let i = 0; i < steps; i++) {
+    const elev = maxElev - (i / steps) * elevRange; // Top = 2900, bottom = 0
+    const normForColor = (elev + 100) / 3000; // Original normalization for color function
+    const color = elevationColor(normForColor);
+    ctx.fillStyle = color;
+    ctx.fillRect(barX, barY + (i * barH / steps), barW, Math.ceil(barH / steps) + 1);
+  }
+  
+  // Border around bar
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barW, barH);
+  
+  // Labels (every 100m from 0 to 2900m)
+  ctx.fillStyle = '#fff';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  
+  for (let elev = 2900; elev >= 0; elev -= 100) {
+    const norm = (elev - minElev) / elevRange;
+    const y = barY + barH * (1 - norm);
+    
+    // Tick mark
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(barX + barW, y);
+    ctx.lineTo(barX + barW + 5, y);
+    ctx.stroke();
+    
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`${elev}m`, barX + barW + 8, y + 4);
+  }
 }
 
 function elevationColor(norm) {
@@ -1518,10 +1593,6 @@ mapCanvas.addEventListener('mousemove', e => {
           const radObserverHeight = parseFloat(document.getElementById('obsHeight')?.value || 0);
           document.getElementById('startTowerHeight').value = radObserverHeight;
           document.getElementById('endTowerHeight').value = 0;
-          // Enable manual towers checkbox if radial observer tower > 0
-          if (radObserverHeight > 0) {
-            document.getElementById('showUserTowers').checked = true;
-          }
           
           // Show profile panels since we have data
           const profilePanel = document.getElementById('profilePanel');
@@ -1923,11 +1994,15 @@ function calculateOptimalTowerHeights(profileData, treeHeight = 5) {
   let minTotalHeight = Infinity;
   let bestStart = 0, bestEnd = 0;
   
+  // Use a coarser step size for faster search
+  const step = 1.0; // 1 meter steps instead of 0.5
+  
   // Binary search / optimization for minimum total height
   // For each possible total height, find if there's a valid split
-  for (let totalH = 0; totalH <= 200; totalH += 0.5) {
+  // Search up to 300m to detect when solution exceeds practical limits
+  for (let totalH = 0; totalH <= 300; totalH += step) {
     // Try different splits of this total height
-    for (let startH = 0; startH <= totalH; startH += 0.5) {
+    for (let startH = 0; startH <= totalH; startH += step) {
       const endH = totalH - startH;
       
       // Check if this combination gives LOS
@@ -2276,7 +2351,7 @@ function drawProfile(los) {
   if (showOptimalTowers && firstValid && lastValid) {
     const optimal = calculateOptimalTowerHeights(profileData, treeHeight);
     
-    if (optimal.totalHeight < Infinity) {
+    if (optimal && optimal.totalHeight < Infinity) {
       const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev + optimal.startHeight);
       const x2 = toX(lastValid.dist),  y2 = toY(lastValid.elev + optimal.endHeight);
 
@@ -2310,6 +2385,17 @@ function drawProfile(los) {
       ctx.fillStyle = '#4effa0';
       ctx.textAlign = 'center';
       ctx.fillText(`Optimal: ${optimal.startHeight.toFixed(1)}m + ${optimal.endHeight.toFixed(1)}m`, (x1+x2)/2, Math.min(y1,y2) - 10);
+      ctx.restore();
+    } else {
+      // Show warning if no solution found within limit
+      ctx.save();
+      ctx.fillStyle = '#ffaa00';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 3;
+      const warningText = '⚠ Optimal tower height exceeds 300m limit';
+      ctx.strokeText(warningText, pad.left + 10, pad.top + 40);
+      ctx.fillText(warningText, pad.left + 10, pad.top + 40);
       ctx.restore();
     }
   }
@@ -2521,9 +2607,9 @@ function drawProfile(los) {
   
   // Draw obstruction markers for optimal towers
   if (showOptimalTowers && firstValid && lastValid) {
-    const optimal = calculateOptimalTowers(firstValid.elev, lastValid.elev);
+    const optimal = calculateOptimalTowerHeights(profileData, treeHeight);
     
-    if (optimal) {
+    if (optimal && optimal.totalHeight < Infinity) {
       const x1 = toX(firstValid.dist), y1 = toY(firstValid.elev + optimal.startHeight);
       const x2 = toX(lastValid.dist), y2 = toY(lastValid.elev + optimal.endHeight);
       const obstructions = findLineObstructions(x1, y1, x2, y2);
