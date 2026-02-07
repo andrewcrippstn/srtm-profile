@@ -636,7 +636,7 @@
         </div>
         <button class="btn btn-primary" id="btnGenerateRadial">Generate Radial LOS</button>
         <div class="info-text">
-          💡 Hover over sight lines to see profile
+          💡 Green sections have line of sight, red sections are blocked
         </div>
       </div>
       
@@ -689,10 +689,11 @@ let radialData   = [];
 let cachedLOS    = null;
 let filesLoading = 0;
 let observerLocation = null; // {lat, lng}
-let targetLocation = null;   // {lat, lng} for A→B
-let currentBearing = null;   // bearing being hovered
-let selectedBearing = null;  // bearing selected by click
+let targetLocation = null;   // {lat, lng} for A→B - the blue line target
+let hoverLocation = null;    // {lat, lng} for hover target on A→B tab
 let hoverDistance = null;    // distance along radial line where mouse is hovering
+let blueLineProfileData = []; // Store blue line profile data
+let blueLineLOS = null;       // Store blue line LOS result
 
 /* ═══════════════════════════════════════════════════════════
    INDEXEDDB HELPERS (for large HGT files)
@@ -866,6 +867,7 @@ let mapZoom = 1;
 let mapOffsetX = 0;
 let mapOffsetY = 0;
 let mapIsPanning = false;
+let mapWasPanning = false;
 let mapLastX = 0;
 let mapLastY = 0;
 
@@ -1202,37 +1204,34 @@ function drawTerrainMap() {
     mctx.lineWidth = 2;
     
     radialData.forEach(ray => {
-      const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, ray.radius);
-      const ex = toCanvasX(endPoint.lng);
-      const ey = toCanvasY(endPoint.lat);
-      
-      // Calculate the obstruction point (first hill obstruction, no trees)
-      const obstructionDist = ray.hillBlockDist || ray.radius;
-      const obstructionPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, obstructionDist);
-      const ox = toCanvasX(obstructionPoint.lng);
-      const oy = toCanvasY(obstructionPoint.lat);
-      
-      // Draw green section from observer to first obstruction
-      mctx.strokeStyle = 'rgba(78,255,160,0.6)';
-      mctx.beginPath();
-      mctx.moveTo(cx, cy);
-      mctx.lineTo(ox, oy);
-      mctx.stroke();
-      
-      // Draw red section from obstruction to max radius (if obstructed)
-      if (obstructionDist < ray.radius) {
-        mctx.strokeStyle = 'rgba(255,92,92,0.6)';
+      // Draw segments based on LOS check at each point
+      if (ray.losSegments && ray.losSegments.length > 0) {
+        ray.losSegments.forEach(seg => {
+          const startPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, seg.start);
+          const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, seg.end);
+          const sx = toCanvasX(startPoint.lng);
+          const sy = toCanvasY(startPoint.lat);
+          const ex = toCanvasX(endPoint.lng);
+          const ey = toCanvasY(endPoint.lat);
+          
+          mctx.strokeStyle = seg.hasLOS ? 'rgba(78,255,160,0.6)' : 'rgba(255,92,92,0.6)';
+          mctx.beginPath();
+          mctx.moveTo(sx, sy);
+          mctx.lineTo(ex, ey);
+          mctx.stroke();
+        });
+      } else {
+        // Fallback - draw entire line
+        const endPoint = destPoint(observerLocation.lat, observerLocation.lng, ray.bearing, ray.radius);
+        const ex = toCanvasX(endPoint.lng);
+        const ey = toCanvasY(endPoint.lat);
+        
+        mctx.strokeStyle = ray.visible ? 'rgba(78,255,160,0.6)' : 'rgba(255,92,92,0.6)';
         mctx.beginPath();
-        mctx.moveTo(ox, oy);
+        mctx.moveTo(cx, cy);
         mctx.lineTo(ex, ey);
         mctx.stroke();
       }
-      
-      // Draw endpoint marker
-      mctx.beginPath();
-      mctx.arc(ex, ey, 3, 0, Math.PI*2);
-      mctx.fillStyle = ray.visible ? 'rgba(78,255,160,0.8)' : 'rgba(255,92,92,0.8)';
-      mctx.fill();
     });
     mctx.restore();
   }
@@ -1416,6 +1415,12 @@ function drawMinimap(minLat, maxLat, minLng, maxLng, mainW, mainH) {
 mapCanvas.addEventListener('click', e => {
   if (!mapCanvas._mapParams) return;
   
+  // Don't set target if we were panning
+  if (mapWasPanning) {
+    mapWasPanning = false;
+    return;
+  }
+  
   const activeTab = getActiveTab();
   
   const rect = mapCanvas.getBoundingClientRect();
@@ -1446,80 +1451,22 @@ mapCanvas.addEventListener('click', e => {
       document.getElementById('obsLat').value = lat.toFixed(5);
       document.getElementById('obsLng').value = lng.toFixed(5);
       radialData = []; // Clear radial lines when observer moves
-      selectedBearing = null; // Clear selection when observer moves
       
       setStatus('Observer location set to ' + lat.toFixed(5) + ', ' + lng.toFixed(5), false);
       drawTerrainMap();
     } else if (activeTab === 'ab') {
-      // Check if clicking on a radial line
-      if (radialData && radialData.length > 0 && observerLocation) {
-        const hoveredRay = findHoveredRay(mx, my, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY);
-        
-        if (hoveredRay) {
-          // Clicked on a radial line - update target to that line's endpoint
-          selectedBearing = hoveredRay.bearing; // Remember this selection
-          const endPoint = destPoint(observerLocation.lat, observerLocation.lng, hoveredRay.bearing, hoveredRay.radius);
-          targetLocation = { lat: endPoint.lat, lng: endPoint.lng };
-          document.getElementById('endLat').value = endPoint.lat.toFixed(5);
-          document.getElementById('endLng').value = endPoint.lng.toFixed(5);
-          
-          // Use cached profile data
-          if (hoveredRay.profileData && hoveredRay.losResult) {
-            profileData = hoveredRay.profileData;
-            cachedLOS = hoveredRay.losResult;
-            
-            const radObserverHeight = parseFloat(document.getElementById('obsHeight')?.value || 0);
-            document.getElementById('startTowerHeight').value = radObserverHeight;
-            document.getElementById('endTowerHeight').value = 0;
-            if (radObserverHeight > 0) {
-              document.getElementById('showUserTowers').checked = true;
-            }
-            
-            // Show profile panels
-            const profilePanel = document.getElementById('profilePanel');
-            const profileOptionsPanel = document.getElementById('profileOptionsPanel');
-            if (profilePanel && profileOptionsPanel) {
-              profilePanel.classList.add('visible');
-              profileOptionsPanel.classList.add('visible');
-            }
-            
-            // Update profile display
-            const dist = haversine(observerLocation.lat, observerLocation.lng, endPoint.lat, endPoint.lng);
-            updateProfileStats(dist, cachedLOS);
-            drawProfile(cachedLOS);
-          }
-          
-          setStatus('Selected radial line at bearing ' + hoveredRay.bearing.toFixed(1) + '°', false);
-          drawTerrainMap(); // Redraw to show updated blue line
-        } else {
-          // Not on a radial line - set target to clicked location and generate profile
-          selectedBearing = null; // Clear selection
-          targetLocation = { lat, lng };
-          document.getElementById('endLat').value = lat.toFixed(5);
-          document.getElementById('endLng').value = lng.toFixed(5);
-          
-          setStatus('Target location set to ' + lat.toFixed(5) + ', ' + lng.toFixed(5), false);
-          drawTerrainMap(); // Redraw to show updated blue line
-          
-          // Generate profile for this location
-          if (observerLocation) {
-            generateProfile();
-          }
-        }
-      } else {
-        // No radial lines - set target location and generate profile
-        selectedBearing = null; // Clear selection
-        targetLocation = { lat, lng };
-        document.getElementById('endLat').value = lat.toFixed(5);
-        document.getElementById('endLng').value = lng.toFixed(5);
-        
-        setStatus('Target location set to ' + lat.toFixed(5) + ', ' + lng.toFixed(5), false);
-        drawTerrainMap(); // Redraw to show updated blue line
-        
-        // Generate profile for this location
-        if (observerLocation) {
-          generateProfile();
-        }
+      // Set target location and generate profile
+      targetLocation = { lat, lng };
+      hoverLocation = null; // Clear hover when clicking
+      document.getElementById('endLat').value = lat.toFixed(5);
+      document.getElementById('endLng').value = lng.toFixed(5);
+      
+      setStatus('Target location set to ' + lat.toFixed(5) + ', ' + lng.toFixed(5), false);
+      drawTerrainMap(); // Redraw to show updated blue line
+      
+      // Generate profile for this location
+      if (observerLocation) {
+        generateProfile();
       }
     }
   }
@@ -1562,55 +1509,44 @@ mapCanvas.addEventListener('mousemove', e => {
     mapHoverInfo.style.top = (my - 60) + 'px';
     mapHoverInfo.classList.add('visible');
     
-    // Check if hovering over a radial line (only on A→B tab)
+    // On A→B tab, generate profile for hover location
     const activeTab = getActiveTab();
-    if (activeTab === 'ab' && radialData && radialData.length > 0 && observerLocation) {
-      const hoveredRay = findHoveredRay(canvasX, canvasY, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY);
+    if (activeTab === 'ab' && observerLocation) {
+      hoverLocation = { lat, lng };
       
-      // Calculate distance from observer to hover point for profile cursor
-      hoverDistance = haversine(observerLocation.lat, observerLocation.lng, lat, lng);
+      // Generate profile for hover location
+      const sLat = observerLocation.lat;
+      const sLng = observerLocation.lng;
+      const N = parseInt(document.getElementById('sampleCount').value);
+      const dist = haversine(sLat, sLng, lat, lng);
+      const hoverProfileData = [];
       
-      // Use hovered ray if hovering, otherwise use selected ray
-      const rayToShow = hoveredRay || (selectedBearing !== null ? radialData.find(r => r.bearing === selectedBearing) : null);
-      const rayBearing = rayToShow ? rayToShow.bearing : null;
-      
-      if (rayToShow && rayBearing !== currentBearing) {
-        currentBearing = rayBearing;
-        
-        // Calculate endpoint but DON'T update targetLocation (to avoid map redraw)
-        const endPoint = destPoint(observerLocation.lat, observerLocation.lng, rayToShow.bearing, rayToShow.radius);
-        
-        // Update input fields only (don't update targetLocation to avoid triggering map redraw)
-        document.getElementById('endLat').value = endPoint.lat.toFixed(5);
-        document.getElementById('endLng').value = endPoint.lng.toFixed(5);
-        saveInputsToStorage();
-        
-        // Use cached profile data instead of recalculating
-        if (rayToShow.profileData && rayToShow.losResult) {
-          profileData = rayToShow.profileData;
-          cachedLOS = rayToShow.losResult;
-          
-          const radObserverHeight = parseFloat(document.getElementById('obsHeight')?.value || 0);
-          document.getElementById('startTowerHeight').value = radObserverHeight;
-          document.getElementById('endTowerHeight').value = 0;
-          
-          // Show profile panels since we have data
-          const profilePanel = document.getElementById('profilePanel');
-          const profileOptionsPanel = document.getElementById('profileOptionsPanel');
-          if (profilePanel && profileOptionsPanel) {
-            profilePanel.classList.add('visible');
-            profileOptionsPanel.classList.add('visible');
-          }
-          
-          // Update profile display ONLY (no map redraw)
-          const dist = haversine(observerLocation.lat, observerLocation.lng, endPoint.lat, endPoint.lng);
-          updateProfileStats(dist, cachedLOS);
-          drawProfile(cachedLOS);
-        }
+      for (let i = 0; i <= N; i++) {
+        const t = i / N;
+        const pt = interpolateLine(sLat, sLng, lat, lng, t);
+        const elev = getElevation(pt.lat, pt.lng);
+        const d = dist * t;
+        hoverProfileData.push({ dist: d, elev: elev !== null ? elev : null });
       }
-    } else if (activeTab !== 'ab') {
-      // Reset current bearing when not on A→B tab
-      currentBearing = null;
+      
+      if (!hoverProfileData.every(p => p.elev === null)) {
+        const startElev = hoverProfileData.find(p => p.elev !== null)?.elev ?? 0;
+        const endElev = hoverProfileData[hoverProfileData.length - 1]?.elev ?? 0;
+        const obsH = parseFloat(document.getElementById('obsHeight')?.value || 0);
+        const treeH = parseFloat(document.getElementById('treeHeight')?.value || 5);
+        const hoverLOS = checkLOS(sLat, sLng, startElev + obsH, lat, lng, N, treeH, endElev);
+        
+        // Update profile display with hover data
+        profileData = hoverProfileData;
+        cachedLOS = hoverLOS;
+        updateProfileStats(dist, hoverLOS);
+        drawProfile(hoverLOS);
+        
+        // Calculate distance for profile cursor
+        hoverDistance = haversine(observerLocation.lat, observerLocation.lng, lat, lng);
+      }
+    } else {
+      hoverLocation = null;
       hoverDistance = null;
     }
   } else {
@@ -1621,52 +1557,47 @@ mapCanvas.addEventListener('mousemove', e => {
 
 mapCanvas.addEventListener('mouseleave', () => {
   mapHoverInfo.classList.remove('visible');
-  currentBearing = null;
   hoverDistance = null;
-});
-
-function findHoveredRay(mx, my, minLat, maxLat, minLng, maxLng, latRange, lngRange, W, H, zoom, offsetX, offsetY) {
-  if (!observerLocation || !radialData || radialData.length === 0) return null;
+  hoverLocation = null;
   
-  // Convert mouse position to data space coordinates
-  // Forward: screenX = W/2 + (dataX - W/2 + offsetX) * zoom
-  // Inverse: dataX = (screenX - W/2) / zoom + W/2 - offsetX
-  const mouseDataX = (mx - W/2) / zoom + W/2 - offsetX;
-  const mouseDataY = (my - H/2) / zoom + H/2 - offsetY;
-  
-  const mouseLng = minLng + (mouseDataX / W) * lngRange;
-  const mouseLat = minLat + (1 - mouseDataY / H) * latRange;
-  
-  // Calculate bearing from observer to mouse
-  const mouseBearing = bearing(observerLocation.lat, observerLocation.lng, mouseLat, mouseLng);
-  
-  // Find the ray with the closest bearing to the mouse position
-  let closestRay = null;
-  let minAngleDiff = Infinity;
-  
-  radialData.forEach(ray => {
-    let angleDiff = Math.abs(ray.bearing - mouseBearing);
-    if (angleDiff > 180) angleDiff = 360 - angleDiff;
-    
-    if (angleDiff < minAngleDiff) {
-      minAngleDiff = angleDiff;
-      closestRay = ray;
+  // Revert to blue line profile on A→B tab
+  const activeTab = getActiveTab();
+  if (activeTab === 'ab' && blueLineProfileData.length > 0) {
+    profileData = blueLineProfileData;
+    cachedLOS = blueLineLOS;
+    if (observerLocation && targetLocation) {
+      const dist = haversine(observerLocation.lat, observerLocation.lng, targetLocation.lat, targetLocation.lng);
+      updateProfileStats(dist, blueLineLOS);
     }
-  });
-  
-  return closestRay;
-}
+    drawProfile(blueLineLOS);
+  }
+});
 
 // Pan
 mapCanvas.addEventListener('mousedown', e => {
   mapIsPanning = true;
+  mapWasPanning = false;
   mapLastX = e.clientX;
   mapLastY = e.clientY;
   mapCanvas.classList.add('panning');
+  
+  // Revert to blue line when panning
+  hoverLocation = null;
+  const activeTab = getActiveTab();
+  if (activeTab === 'ab' && blueLineProfileData.length > 0) {
+    profileData = blueLineProfileData;
+    cachedLOS = blueLineLOS;
+    if (observerLocation && targetLocation) {
+      const dist = haversine(observerLocation.lat, observerLocation.lng, targetLocation.lat, targetLocation.lng);
+      updateProfileStats(dist, blueLineLOS);
+    }
+    drawProfile(blueLineLOS);
+  }
 });
 
 mapCanvas.addEventListener('mousemove', e => {
   if (!mapIsPanning) return;
+  mapWasPanning = true; // Mark that we actually moved while panning
   const dx = e.clientX - mapLastX;
   const dy = e.clientY - mapLastY;
   mapOffsetX += dx / mapZoom;
@@ -1944,6 +1875,8 @@ function generateProfile() {
   setStatus(`Profile generated · ${N+1} samples · ${dist.toFixed(2)} km`, false);
 
   cachedLOS = losResult;
+  blueLineProfileData = [...profileData]; // Store blue line profile
+  blueLineLOS = losResult;                 // Store blue line LOS
   updateProfileStats(dist, losResult);
   drawProfile(losResult);
   drawTerrainMap();
@@ -2698,6 +2631,12 @@ function var_danger() { return '#ff5c5c'; }
 // Auto-update profile when options change
 ['showLOS', 'showUserTowers', 'showMinTowers', 'showOptimalTowers'].forEach(id => {
   document.getElementById(id)?.addEventListener('change', () => {
+    // Use blue line profile if available and not hovering
+    const activeTab = getActiveTab();
+    if (activeTab === 'ab' && !hoverLocation && blueLineProfileData.length > 0) {
+      profileData = blueLineProfileData;
+      cachedLOS = blueLineLOS;
+    }
     if (profileData.length > 0) drawProfile(cachedLOS);
   });
 });
@@ -2706,6 +2645,12 @@ function var_danger() { return '#ff5c5c'; }
   const el = document.getElementById(id);
   if (el) {
     el.addEventListener('input', () => {
+      // Use blue line profile if available and not hovering
+      const activeTab = getActiveTab();
+      if (activeTab === 'ab' && !hoverLocation && blueLineProfileData.length > 0) {
+        profileData = blueLineProfileData;
+        cachedLOS = blueLineLOS;
+      }
       if (profileData.length > 0) drawProfile(cachedLOS);
     });
   }
@@ -2828,13 +2773,14 @@ function generateRadial() {
         if (requiredHeight < maxTowerH) visCount++; else blkCount++;
       }
     } else {
+      // For efficiency, use fewer samples for intermediate LOS checks
+      const losCheckSamples = 50; // Reduced from 100 for better performance
+      
       for (let i = 0; i < numRays; i++) {
         const bearing = (i * angRes) % 360;
         const target  = destPoint(lat, lng, bearing, radius);
         const targetElev = getElevation(target.lat, target.lng);
         if (targetElev === null) continue;
-        
-        const totalTargetElev = targetElev + remoteH;
         
         // Generate profile data for this ray
         const rayProfileData = [];
@@ -2843,27 +2789,99 @@ function generateRadial() {
           const pt = interpolateLine(lat, lng, target.lat, target.lng, t);
           const elev = getElevation(pt.lat, pt.lng);
           const d = radius * t;
-          rayProfileData.push({ dist: d, elev: elev !== null ? elev : null });
+          rayProfileData.push({ dist: d, elev: elev !== null ? elev : null, lat: pt.lat, lng: pt.lng });
         }
         
-        const result  = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, treeH, totalTargetElev);
+        // For each point along the profile, check if a remote tower (0m height) at that point has LOS to observer
+        const losSegments = [];
+        let currentSegmentStart = 0;
+        let currentSegmentHasLOS = null;
         
-        // Calculate first hill obstruction (without trees) for visualization
-        const hillResult = checkLOS(lat, lng, totalObsElev, target.lat, target.lng, samples, 0, totalTargetElev);
+        // Sample points along the ray - use more frequent sampling for better accuracy
+        const checkInterval = Math.max(1, Math.floor(samples / 100)); // Check ~100 points
+        
+        for (let j = 0; j < rayProfileData.length; j += checkInterval) {
+          const point = rayProfileData[j];
+          if (point.elev === null) continue;
+          
+          const pointDist = point.dist;
+          
+          // Points very close to observer always have LOS
+          if (pointDist < 0.01) {
+            if (currentSegmentHasLOS === null) {
+              currentSegmentHasLOS = true;
+            }
+            continue;
+          }
+          
+          // Check LOS from observer tower to this remote point with a tower
+          // We want to know: can the observer tower see a tower at this remote location?
+          // Use the remote tower height from the settings (same as used in A->B profile)
+          const remoteH = parseFloat(document.getElementById('endTowerHeight')?.value || 0);
+          const remoteTowerElev = point.elev + remoteH;
+          
+          // Check from observer TO remote point with tower, including tree height along the path
+          const losResult = checkLOS(lat, lng, totalObsElev, point.lat, point.lng, losCheckSamples, treeH, remoteTowerElev);
+          const hasLOS = losResult.visible;
+          
+          // Log first few checks for debugging
+          if (i === 0 && j < 5) {
+            console.log(`Ray ${bearing.toFixed(1)}° Point ${j}: dist=${pointDist.toFixed(2)}km, obsElev=${totalObsElev.toFixed(1)}m -> remoteTowerElev=${remoteTowerElev.toFixed(1)}m (terrain+${remoteH}m), treeH=${treeH}m, hasLOS=${hasLOS}`);
+          }
+          
+          // Initialize or update segment
+          if (currentSegmentHasLOS === null) {
+            currentSegmentHasLOS = hasLOS;
+          } else if (hasLOS !== currentSegmentHasLOS) {
+            // Create segment when LOS status changes
+            losSegments.push({
+              start: currentSegmentStart,
+              end: pointDist,
+              hasLOS: currentSegmentHasLOS
+            });
+            currentSegmentStart = pointDist;
+            currentSegmentHasLOS = hasLOS;
+          }
+        }
+        
+        // Save final segment if we have data
+        if (currentSegmentHasLOS !== null) {
+          losSegments.push({
+            start: currentSegmentStart,
+            end: radius,
+            hasLOS: currentSegmentHasLOS
+          });
+        }
+        
+        // If no segments, assume all visible (flat terrain case)
+        if (losSegments.length === 0) {
+          losSegments.push({
+            start: 0,
+            end: radius,
+            hasLOS: true
+          });
+        }
+        
+        // Count as visible if any segment has LOS
+        const anyVisible = losSegments.some(seg => seg.hasLOS);
 
         radialData.push({
           bearing,
-          visible:     result.visible,
-          visibleDist: result.visibleDist,
-          blockElev:   result.blockElev,
-          blockDist:   result.blockDist,
-          blockages:   result.blockages,
+          visible: anyVisible,
           profileData: rayProfileData,
-          losResult:   result,
-          radius:      radius,
-          hillBlockDist: hillResult.visibleDist  // Distance to first hill obstruction (no trees)
+          losSegments: losSegments,
+          radius: radius
         });
-        if (result.visible) visCount++; else blkCount++;
+        
+        if (anyVisible) visCount++; else blkCount++;
+        
+        // Log first ray summary for debugging
+        if (i === 0) {
+          console.log(`Ray 0° summary: ${losSegments.length} segments, anyVisible=${anyVisible}`);
+          losSegments.forEach((seg, idx) => {
+            console.log(`  Segment ${idx}: ${seg.start.toFixed(2)}-${seg.end.toFixed(2)}km, hasLOS=${seg.hasLOS}`);
+          });
+        }
       }
     }
 
