@@ -44,6 +44,34 @@
   h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.3rem; letter-spacing: -0.02em; color: #fff; }
   h1 span { color: var(--accent); }
   .header-sub { font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-left: auto; }
+  
+  /* ─── Navigation Dropdown ─── */
+  .nav-dropdown {
+    position: relative;
+    margin-left: 24px;
+  }
+  .nav-dropdown select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 8px 32px 8px 12px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23c8d0dc' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  .nav-dropdown select:hover {
+    border-color: var(--border-focus);
+  }
+  .nav-dropdown select:focus {
+    border-color: var(--border-focus);
+  }
 
   /* ─── Main Layout ─── */
   .main-layout {
@@ -465,6 +493,171 @@
     color: var(--text-dim);
     border-top: 1px solid var(--border);
   }
+  
+  /* ─── Page Sections ─── */
+  .page-section {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+  }
+  .page-section.active {
+    display: flex;
+  }
+  
+  #terrainPage {
+    flex-direction: row;
+  }
+  
+  /* ─── Site Data Page ─── */
+  .site-data-page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    padding: 24px;
+    overflow-y: auto;
+  }
+  
+  .site-data-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  
+  .site-data-header h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.5rem;
+    color: var(--accent);
+  }
+  
+  .site-form {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  
+  .site-form h3 {
+    font-size: 0.85rem;
+    color: var(--accent);
+    margin-bottom: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 2fr 2fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  
+  .form-actions {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .site-table-container {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  .site-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .site-table thead {
+    background: var(--bg-input);
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .site-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  
+  .site-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  
+  .site-table tbody tr:hover {
+    background: rgba(78,159,255,0.05);
+  }
+  
+  .site-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  
+  .site-actions {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .btn-icon {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+  }
+  
+  .btn-icon:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  
+  .btn-icon.danger:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  
+  /* ─── HGT Import Page ─── */
+  .hgt-import-page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    padding: 24px;
+    overflow-y: auto;
+  }
+  
+  .hgt-import-header {
+    margin-bottom: 24px;
+  }
+  
+  .hgt-import-header h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.5rem;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  
+  .hgt-import-header p {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+  
+  .import-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
 </style>
 </head>
 <body>
@@ -472,6 +665,13 @@
 <header>
   <div class="header-inner">
     <h1>SRTM <span>Terrain Profile</span></h1>
+    <div class="nav-dropdown">
+      <select id="pageSelector">
+        <option value="terrain">Terrain Profile</option>
+        <option value="import">Import HGT Tiles</option>
+        <option value="sites">Site Data</option>
+      </select>
+    </div>
     <div class="header-sub">elevation · line of sight</div>
   </div>
 </header>
@@ -479,27 +679,13 @@
 <div class="main-layout">
   
   <!-- ═══════════════════════════════════════════════════════════
+       TERRAIN PROFILE PAGE (Main terrain map and profile)
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="page-section active" id="terrainPage">
+  <!-- ═══════════════════════════════════════════════════════════
        TERRAIN MAP SECTION (Full screen with right panel)
        ═══════════════════════════════════════════════════════════ -->
   <div class="terrain-map-section">
-    <div class="import-section">
-      <button class="import-toggle-btn" id="importToggle">
-        <span class="arrow">▶</span>
-        <span>Import HGT Tiles</span>
-      </button>
-      <div class="import-content" id="importContent">
-        <div class="dropzone" id="dropzone" style="margin-bottom: 12px;">
-          <input type="file" id="fileInput" accept=".hgt" multiple />
-          <span>Drop <em>.hgt</em> files or <em>click</em></span>
-        </div>
-        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-          <button class="btn btn-secondary" id="btnSaveTiles">Save to Storage</button>
-          <button class="btn btn-secondary" id="btnLoadTiles">Load from Storage</button>
-          <a href="https://viewfinderpanoramas.org/Coverage%20map%20viewfinderpanoramas_org3.htm" target="_blank" class="btn btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Download HGT</a>
-        </div>
-        <div class="tile-list" id="tileList"></div>
-      </div>
-    </div>
     <div class="canvas-wrap" style="flex: 1;">
       <canvas id="terrainMapCanvas"></canvas>
       <canvas class="minimap" id="minimapCanvas"></canvas>
@@ -508,6 +694,7 @@
         <div><span class="info-label">Lat:</span><span class="info-value" id="hoverLat">—</span></div>
         <div><span class="info-label">Lng:</span><span class="info-value" id="hoverLng">—</span></div>
         <div><span class="info-label">Elev:</span><span class="info-value" id="hoverElev">—</span></div>
+        <div id="hoverSiteDiv" style="display: none; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px;"><span class="info-label">Site:</span><span class="info-value" id="hoverSite">—</span></div>
       </div>
       <button class="btn btn-secondary" id="btnResetZoom" style="position: absolute; top: 12px; left: 12px; z-index: 5;">Reset Zoom</button>
     </div>
@@ -673,6 +860,96 @@
   
   </div><!-- End right-panels -->
   
+  </div><!-- End terrainPage -->
+  
+  <!-- ═══════════════════════════════════════════════════════════
+       HGT IMPORT PAGE
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="page-section" id="importPage">
+    <div class="hgt-import-page">
+      <div class="hgt-import-header">
+        <h2>Import HGT Tiles</h2>
+        <p>Import SRTM elevation data files (.hgt) to enable terrain analysis</p>
+      </div>
+      
+      <div class="import-panel">
+        <h3 style="font-size: 0.85rem; color: var(--accent); margin-bottom: 16px; letter-spacing: 0.08em; text-transform: uppercase;">Upload Files</h3>
+        
+        <div class="dropzone" id="dropzone2" style="margin-bottom: 16px;">
+          <input type="file" id="fileInput2" accept=".hgt" multiple />
+          <span>Drop <em>.hgt</em> files or <em>click</em></span>
+        </div>
+        
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <button class="btn btn-secondary" id="btnSaveTiles2">Save to Storage</button>
+          <button class="btn btn-secondary" id="btnLoadTiles2">Load from Storage</button>
+          <a href="https://viewfinderpanoramas.org/Coverage%20map%20viewfinderpanoramas_org3.htm" target="_blank" class="btn btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Download HGT</a>
+        </div>
+        
+        <div style="margin-bottom: 8px; font-size: 0.7rem; color: var(--text-dim);">Loaded Tiles:</div>
+        <div class="tile-list" id="tileList2"></div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- ═══════════════════════════════════════════════════════════
+       SITE DATA PAGE
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="page-section" id="sitesPage">
+    <div class="site-data-page">
+      <div class="site-data-header">
+        <h2>Site Data</h2>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" id="btnImportSites">Import CSV</button>
+          <button class="btn btn-primary" id="btnExportSites">Export CSV</button>
+        </div>
+      </div>
+      
+      <div class="site-form">
+        <h3>Add New Site</h3>
+        <div class="form-grid">
+          <div class="input-wrap">
+            <label>Latitude</label>
+            <input type="text" id="siteLatInput" placeholder="-42.8826" />
+          </div>
+          <div class="input-wrap">
+            <label>Longitude</label>
+            <input type="text" id="siteLngInput" placeholder="147.3257" />
+          </div>
+          <div class="input-wrap">
+            <label>Tag</label>
+            <input type="text" id="siteTagInput" placeholder="HBT" />
+          </div>
+          <div class="input-wrap">
+            <label>Name</label>
+            <input type="text" id="siteNameInput" placeholder="Hobart" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="btnAddSite">Add Site</button>
+          <button class="btn btn-secondary" id="btnClearForm">Clear</button>
+        </div>
+      </div>
+      
+      <div class="site-table-container">
+        <table class="site-table">
+          <thead>
+            <tr>
+              <th>Latitude</th>
+              <th>Longitude</th>
+              <th>Tag</th>
+              <th>Name</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="siteTableBody">
+            <!-- Sites will be populated here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  
 </div><!-- End main-layout -->
 
 <script>
@@ -694,6 +971,7 @@ let hoverLocation = null;    // {lat, lng} for hover target on A→B tab
 let hoverDistance = null;    // distance along radial line where mouse is hovering
 let blueLineProfileData = []; // Store blue line profile data
 let blueLineLOS = null;       // Store blue line LOS result
+let sites = [];               // Array of site objects: {lat, lng, tag, name}
 
 /* ═══════════════════════════════════════════════════════════
    INDEXEDDB HELPERS (for large HGT files)
@@ -702,7 +980,7 @@ let db = null;
 
 function initDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('SRTMDatabase', 1);
+    const request = indexedDB.open('SRTMDatabase', 2);
     
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
@@ -715,13 +993,15 @@ function initDB() {
       if (!db.objectStoreNames.contains('tiles')) {
         db.createObjectStore('tiles', { keyPath: 'key' });
       }
+      if (!db.objectStoreNames.contains('sites')) {
+        db.createObjectStore('sites', { keyPath: 'id', autoIncrement: true });
+      }
     };
   });
 }
 
 function saveTilesToStorage() {
   if (!db) {
-    console.error('Database not initialized');
     return;
   }
   
@@ -753,7 +1033,6 @@ function saveTilesToStorage() {
 
 function loadTilesFromStorage() {
   if (!db) {
-    console.error('Database not initialized');
     return;
   }
   
@@ -814,7 +1093,7 @@ function saveInputsToStorage() {
     };
     localStorage.setItem('srtm_inputs', JSON.stringify(inputs));
   } catch (e) {
-    console.error('Error saving inputs:', e);
+    // Silent error
   }
 }
 
@@ -845,8 +1124,171 @@ function loadInputsFromStorage() {
       targetLocation = { lat: endLat, lng: endLng };
     }
   } catch (e) {
-    console.error('Error loading inputs:', e);
+    // Silent error
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SITE DATA MANAGEMENT
+   ═══════════════════════════════════════════════════════════ */
+function loadSitesFromStorage() {
+  if (!db) return;
+  
+  try {
+    const transaction = db.transaction(['sites'], 'readonly');
+    const store = transaction.objectStore('sites');
+    const request = store.getAll();
+    
+    request.onsuccess = () => {
+      const savedSites = request.result;
+      if (savedSites.length === 0) {
+        // Preload default sites for Tasmania
+        sites = [
+          { lat: -42.8826, lng: 147.3257, tag: 'HBT', name: 'Hobart' },
+          { lat: -41.4332, lng: 147.1441, tag: 'LST', name: 'Launceston' },
+          { lat: -41.1761, lng: 146.3158, tag: 'DVP', name: 'Devonport' }
+        ];
+        saveSitesToStorage();
+      } else {
+        sites = savedSites;
+      }
+      renderSiteTable();
+      drawTerrainMap();
+    };
+  } catch (e) {
+    // Silent error
+  }
+}
+
+function saveSitesToStorage() {
+  if (!db) return;
+  
+  try {
+    const transaction = db.transaction(['sites'], 'readwrite');
+    const store = transaction.objectStore('sites');
+    
+    store.clear();
+    
+    sites.forEach(site => {
+      store.put(site);
+    });
+  } catch (e) {
+    // Silent error
+  }
+}
+
+function addSite(lat, lng, tag, name) {
+  const site = { lat, lng, tag, name };
+  sites.push(site);
+  saveSitesToStorage();
+  renderSiteTable();
+  drawTerrainMap();
+}
+
+function deleteSite(index) {
+  sites.splice(index, 1);
+  saveSitesToStorage();
+  renderSiteTable();
+  drawTerrainMap();
+}
+
+function editSite(index) {
+  const site = sites[index];
+  document.getElementById('siteLatInput').value = site.lat;
+  document.getElementById('siteLngInput').value = site.lng;
+  document.getElementById('siteTagInput').value = site.tag;
+  document.getElementById('siteNameInput').value = site.name;
+  deleteSite(index);
+}
+
+function renderSiteTable() {
+  const tbody = document.getElementById('siteTableBody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = '';
+  
+  sites.forEach((site, index) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${site.lat.toFixed(4)}</td>
+      <td>${site.lng.toFixed(4)}</td>
+      <td>${site.tag}</td>
+      <td>${site.name}</td>
+      <td>
+        <div class="site-actions">
+          <button class="btn-icon" onclick="editSite(${index})" title="Edit">✏️</button>
+          <button class="btn-icon danger" onclick="deleteSite(${index})" title="Delete">🗑️</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function exportSites() {
+  // Create CSV content
+  let csv = 'Latitude,Longitude,Tag,Name\n';
+  sites.forEach(site => {
+    csv += `${site.lat},${site.lng},"${site.tag}","${site.name}"\n`;
+  });
+  
+  const dataBlob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(dataBlob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'sites.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function importSites() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.csv,text/csv';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const csv = event.target.result;
+        const lines = csv.split('\n').filter(line => line.trim());
+        
+        // Skip header row
+        const imported = [];
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          // Simple CSV parsing (handles quoted fields)
+          const matches = line.match(/([^,"]+|"[^"]*")+/g);
+          if (matches && matches.length >= 4) {
+            const lat = parseFloat(matches[0]);
+            const lng = parseFloat(matches[1]);
+            const tag = matches[2].replace(/^"|"$/g, '').trim();
+            const name = matches[3].replace(/^"|"$/g, '').trim();
+            
+            if (!isNaN(lat) && !isNaN(lng)) {
+              imported.push({ lat, lng, tag, name });
+            }
+          }
+        }
+        
+        if (imported.length > 0) {
+          sites = imported;
+          saveSitesToStorage();
+          renderSiteTable();
+          drawTerrainMap();
+          setStatus(`Imported ${sites.length} sites`, false);
+        } else {
+          setStatus('No valid sites found in CSV', true);
+        }
+      } catch (e) {
+        setStatus('Error importing sites: invalid CSV', true);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -856,6 +1298,10 @@ const dropzone     = document.getElementById('dropzone');
 const fileInput    = document.getElementById('fileInput');
 const tileList     = document.getElementById('tileList');
 const statusMsg    = document.getElementById('statusMsg');
+
+const dropzone2    = document.getElementById('dropzone2');
+const fileInput2   = document.getElementById('fileInput2');
+const tileList2    = document.getElementById('tileList2');
 
 const mapCanvas    = document.getElementById('terrainMapCanvas');
 const mctx         = mapCanvas.getContext('2d');
@@ -882,12 +1328,70 @@ const tooltip      = document.getElementById('tooltip');
 try {
   await initDB();
   loadTilesFromStorage();
+  loadSitesFromStorage();
 } catch (e) {
-  console.error('Failed to initialize database:', e);
   setStatus('Failed to initialize storage: ' + e.message, true);
 }
 
 loadInputsFromStorage();
+
+// Page navigation
+document.getElementById('pageSelector')?.addEventListener('change', (e) => {
+  const page = e.target.value;
+  document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+  
+  if (page === 'terrain') {
+    document.getElementById('terrainPage').classList.add('active');
+  } else if (page === 'import') {
+    document.getElementById('importPage').classList.add('active');
+  } else if (page === 'sites') {
+    document.getElementById('sitesPage').classList.add('active');
+  }
+});
+
+// Site data event handlers
+const btnAddSite = document.getElementById('btnAddSite');
+if (btnAddSite) {
+  btnAddSite.addEventListener('click', () => {
+    const lat = parseFloat(document.getElementById('siteLatInput').value);
+    const lng = parseFloat(document.getElementById('siteLngInput').value);
+    const tag = document.getElementById('siteTagInput').value.trim();
+    const name = document.getElementById('siteNameInput').value.trim();
+  
+  if (isNaN(lat) || isNaN(lng) || !tag || !name) {
+    alert('Please fill in all fields with valid data');
+    return;
+  }
+  
+  addSite(lat, lng, tag, name);
+  
+  // Clear form
+  document.getElementById('siteLatInput').value = '';
+  document.getElementById('siteLngInput').value = '';
+  document.getElementById('siteTagInput').value = '';
+  document.getElementById('siteNameInput').value = '';
+  });
+}
+
+const btnClearForm = document.getElementById('btnClearForm');
+if (btnClearForm) {
+  btnClearForm.addEventListener('click', () => {
+    document.getElementById('siteLatInput').value = '';
+    document.getElementById('siteLngInput').value = '';
+    document.getElementById('siteTagInput').value = '';
+    document.getElementById('siteNameInput').value = '';
+  });
+}
+
+const btnExportSites = document.getElementById('btnExportSites');
+if (btnExportSites) btnExportSites.addEventListener('click', exportSites);
+
+const btnImportSites = document.getElementById('btnImportSites');
+if (btnImportSites) btnImportSites.addEventListener('click', importSites);
+
+// Make functions globally accessible for inline onclick handlers
+window.editSite = editSite;
+window.deleteSite = deleteSite;
 
 // Auto-save inputs on change
 ['obsLat','obsLng','obsHeight','endLat','endLng','radRadius','startTowerHeight','endTowerHeight','treeHeight','radMaxTowerHeight'].forEach(id => {
@@ -946,17 +1450,6 @@ document.getElementById('startTowerHeight')?.addEventListener('input', (e) => {
 });
 
 /* ═══════════════════════════════════════════════════════════
-   IMPORT TOGGLE
-   ═══════════════════════════════════════════════════════════ */
-const importToggle = document.getElementById('importToggle');
-const importContent = document.getElementById('importContent');
-
-importToggle.addEventListener('click', () => {
-  importToggle.classList.toggle('open');
-  importContent.classList.toggle('open');
-});
-
-/* ═══════════════════════════════════════════════════════════
    TAB SWITCHING
    ═══════════════════════════════════════════════════════════ */
 function getActiveTab() {
@@ -992,11 +1485,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 /* ═══════════════════════════════════════════════════════════
    DROPZONE / FILE LOADING
    ═══════════════════════════════════════════════════════════ */
-dropzone.addEventListener('click', () => fileInput.click());
-dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
-dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
-dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('dragover'); loadFiles(e.dataTransfer.files); });
-fileInput.addEventListener('change', e => loadFiles(e.target.files));
+if (dropzone && fileInput) {
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+  dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('dragover'); loadFiles(e.dataTransfer.files); });
+  fileInput.addEventListener('change', e => loadFiles(e.target.files));
+}
 
 function loadFiles(files) {
   const hgtFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.hgt'));
@@ -1275,6 +1770,45 @@ function drawTerrainMap() {
     mctx.lineWidth = 2 / mapZoom;
     mctx.stroke();
   }
+  
+  // Draw site markers
+  sites.forEach(site => {
+    const sx = toCanvasX(site.lng);
+    const sy = toCanvasY(site.lat);
+    
+    // Draw grey circle for site
+    mctx.beginPath();
+    mctx.arc(sx, sy, 6 / mapZoom, 0, Math.PI*2);
+    mctx.fillStyle = '#808080';
+    mctx.fill();
+    mctx.strokeStyle = '#0a0c0f';
+    mctx.lineWidth = 1.5 / mapZoom;
+    mctx.stroke();
+    
+    // Draw tag label (keep in transformed space)
+    const fontSize = 10 / mapZoom;
+    mctx.font = `${fontSize}px "IBM Plex Mono"`;
+    mctx.textAlign = 'center';
+    mctx.textBaseline = 'bottom';
+    
+    // Background for tag
+    const textMetrics = mctx.measureText(site.tag);
+    const padding = 3 / mapZoom;
+    const bgHeight = 12 / mapZoom;
+    const bgY = sy - 10 / mapZoom - bgHeight;
+    
+    mctx.fillStyle = 'rgba(10, 12, 15, 0.8)';
+    mctx.fillRect(
+      sx - textMetrics.width / 2 - padding,
+      bgY - padding,
+      textMetrics.width + padding * 2,
+      bgHeight + padding * 2
+    );
+    
+    // Draw tag text
+    mctx.fillStyle = '#c8d0dc';
+    mctx.fillText(site.tag, sx, sy - 10 / mapZoom);
+  });
 
   mctx.restore();
   
@@ -1501,10 +2035,45 @@ mapCanvas.addEventListener('mousemove', e => {
   const lat = minLat + (1 - ty / H) * latRange;
   const elev = getElevation(lat, lng);
   
+  // Check if hovering over a site
+  let hoveredSite = null;
+  for (const site of sites) {
+    const siteCanvasX = W * (site.lng - minLng) / lngRange;
+    const siteCanvasY = H * (1 - (site.lat - minLat) / latRange);
+    
+    // Transform to screen coordinates
+    const siteTx = (siteCanvasX - W/2 + offsetX) * zoom + W/2;
+    const siteTy = (siteCanvasY - H/2 + offsetY) * zoom + H/2;
+    
+    // Check distance in screen space
+    const dist = Math.sqrt((canvasX - siteTx) ** 2 + (canvasY - siteTy) ** 2);
+    const hoverRadius = 15; // pixels
+    
+    if (dist < hoverRadius) {
+      hoveredSite = site;
+      break;
+    }
+  }
+  
+  if (hoveredSite) {
+    // Show site info with name on fourth line
+    const siteElev = getElevation(hoveredSite.lat, hoveredSite.lng);
+    document.getElementById('hoverLat').textContent = hoveredSite.lat.toFixed(5) + '°';
+    document.getElementById('hoverLng').textContent = hoveredSite.lng.toFixed(5) + '°';
+    document.getElementById('hoverElev').textContent = siteElev !== null ? Math.round(siteElev) + ' m' : '—';
+    document.getElementById('hoverSite').textContent = hoveredSite.name;
+    document.getElementById('hoverSiteDiv').style.display = 'block';
+    mapHoverInfo.style.left = (mx + 14) + 'px';
+    mapHoverInfo.style.top = (my - 80) + 'px';
+    mapHoverInfo.classList.add('visible');
+    return;
+  }
+  
   if (elev !== null) {
     document.getElementById('hoverLat').textContent = lat.toFixed(5) + '°';
     document.getElementById('hoverLng').textContent = lng.toFixed(5) + '°';
     document.getElementById('hoverElev').textContent = Math.round(elev) + ' m';
+    document.getElementById('hoverSiteDiv').style.display = 'none';
     mapHoverInfo.style.left = (mx + 14) + 'px';
     mapHoverInfo.style.top = (my - 60) + 'px';
     mapHoverInfo.classList.add('visible');
@@ -1660,22 +2229,64 @@ document.getElementById('btnResetZoom')?.addEventListener('click', () => {
 document.getElementById('btnSaveTiles')?.addEventListener('click', saveTilesToStorage);
 document.getElementById('btnLoadTiles')?.addEventListener('click', loadTilesFromStorage);
 
-function renderTileTags() {
-  tileList.innerHTML = '';
-  Object.keys(tiles).forEach(key => {
-    const t   = tiles[key];
-    const tag = document.createElement('div');
-    tag.className = 'tile-tag';
-    tag.innerHTML = `<span class="tag-name">${key}</span><span class="tag-res">${t.size === 1201 ? '3″' : '1″'}</span><span class="tag-remove" data-key="${key}">✕</span>`;
-    tileList.appendChild(tag);
-  });
-  tileList.querySelectorAll('.tag-remove').forEach(el => {
-    el.addEventListener('click', () => { 
-      delete tiles[el.dataset.key]; 
-      renderTileTags(); 
-      drawTerrainMap();
+// Import page dropzone and buttons
+if (dropzone2 && fileInput2) {
+  dropzone2.addEventListener('click', () => fileInput2.click());
+  dropzone2.addEventListener('dragover', e => { e.preventDefault(); dropzone2.classList.add('dragover'); });
+  dropzone2.addEventListener('dragleave', e => { e.preventDefault(); dropzone2.classList.remove('dragover'); });
+  dropzone2.addEventListener('drop', e => { e.preventDefault(); dropzone2.classList.remove('dragover'); loadFiles(e.dataTransfer.files); });
+  fileInput2.addEventListener('change', e => loadFiles(e.target.files));
+}
+
+document.getElementById('btnSaveTiles2')?.addEventListener('click', saveTilesToStorage);
+document.getElementById('btnLoadTiles2')?.addEventListener('click', () => {
+  loadTilesFromStorage();
+  if (typeof renderTileTags2 === 'function') renderTileTags2();
+});
+
+function renderTileTags2() {
+  // Render for import page
+  if (tileList2) {
+    tileList2.innerHTML = '';
+    Object.keys(tiles).forEach(key => {
+      const t   = tiles[key];
+      const tag = document.createElement('div');
+      tag.className = 'tile-tag';
+      tag.innerHTML = `<span class="tag-name">${key}</span><span class="tag-res">${t.size === 1201 ? '3″' : '1″'}</span><span class="tag-remove" data-key="${key}">✕</span>`;
+      tileList2.appendChild(tag);
     });
-  });
+    tileList2.querySelectorAll('.tag-remove').forEach(el => {
+      el.addEventListener('click', () => { 
+        delete tiles[el.dataset.key]; 
+        renderTileTags(); 
+        renderTileTags2();
+        drawTerrainMap();
+      });
+    });
+  }
+}
+
+function renderTileTags() {
+  // Render for terrain page
+  if (tileList) {
+    tileList.innerHTML = '';
+    Object.keys(tiles).forEach(key => {
+      const t   = tiles[key];
+      const tag = document.createElement('div');
+      tag.className = 'tile-tag';
+      tag.innerHTML = `<span class="tag-name">${key}</span><span class="tag-res">${t.size === 1201 ? '3″' : '1″'}</span><span class="tag-remove" data-key="${key}">✕</span>`;
+      tileList.appendChild(tag);
+    });
+    tileList.querySelectorAll('.tag-remove').forEach(el => {
+      el.addEventListener('click', () => { 
+        delete tiles[el.dataset.key]; 
+        renderTileTags(); 
+        renderTileTags2();
+        drawTerrainMap();
+      });
+    });
+  }
+  if (typeof renderTileTags2 === 'function') renderTileTags2();
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2824,11 +3435,6 @@ function generateRadial() {
           const losResult = checkLOS(lat, lng, totalObsElev, point.lat, point.lng, losCheckSamples, treeH, remoteTowerElev);
           const hasLOS = losResult.visible;
           
-          // Log first few checks for debugging
-          if (i === 0 && j < 5) {
-            console.log(`Ray ${bearing.toFixed(1)}° Point ${j}: dist=${pointDist.toFixed(2)}km, obsElev=${totalObsElev.toFixed(1)}m -> remoteTowerElev=${remoteTowerElev.toFixed(1)}m (terrain+${remoteH}m), treeH=${treeH}m, hasLOS=${hasLOS}`);
-          }
-          
           // Initialize or update segment
           if (currentSegmentHasLOS === null) {
             currentSegmentHasLOS = hasLOS;
@@ -2874,14 +3480,6 @@ function generateRadial() {
         });
         
         if (anyVisible) visCount++; else blkCount++;
-        
-        // Log first ray summary for debugging
-        if (i === 0) {
-          console.log(`Ray 0° summary: ${losSegments.length} segments, anyVisible=${anyVisible}`);
-          losSegments.forEach((seg, idx) => {
-            console.log(`  Segment ${idx}: ${seg.start.toFixed(2)}-${seg.end.toFixed(2)}km, hasLOS=${seg.hasLOS}`);
-          });
-        }
       }
     }
 
